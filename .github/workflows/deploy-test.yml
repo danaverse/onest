@@ -46,25 +46,27 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
           SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
-          SSH_PASS: ${{ secrets.TEST_SSH_PASS || secrets.CONTABO_SSH_PASS || secrets.SSH_PASSWORD }}
           SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
         run: |
+          missing=0
           if [ -z "$SSH_HOST" ]; then
-            echo "::error::Missing TEST_SSH_HOST (or CONTABO_HOST) secret."
+            echo "::error::Missing TEST_SSH_HOST secret."
+            missing=1
+          fi
+          if [ -z "$SSH_KEY" ]; then
+            echo "::error::Missing TEST_SSH_KEY secret. An SSH private key is required for passwordless deployment."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          if [ -z "$SSH_PASS" ] && [ -z "$SSH_KEY" ]; then
-            echo "::error::Neither SSH password (TEST_SSH_PASS) nor private key (TEST_SSH_KEY / CONTABO_SSH_PRIVATE_KEY) was found in repository secrets."
-            exit 1
-          fi
-          echo "Deployment target: ${SSH_USER}@${SSH_HOST}"
+          echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH key auth)"
 
       - name: Deploy to Test VM
         env:
           SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
           SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
           SSH_PORT: ${{ secrets.TEST_SSH_PORT || secrets.CONTABO_SSH_PORT || '22' }}
-          SSH_PASS: ${{ secrets.TEST_SSH_PASS || secrets.CONTABO_SSH_PASS || secrets.SSH_PASSWORD }}
           SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
           WEB_DEST: ${{ vars.TEST_WEB_PATH || secrets.TEST_WEB_PATH || '/var/www/onest-test' }}
           REPO_DEST: ${{ vars.TEST_REPO_PATH || secrets.TEST_REPO_PATH || '/opt/onest' }}
@@ -72,27 +74,21 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          if [ -n "$SSH_KEY" ]; then
-            echo "Configuring SSH private key authentication..."
-            printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-            chmod 600 ~/.ssh/deploy_key
-            SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=no"
-            RSYNC_SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=no"
-            DO_RSYNC="rsync"
-          else
-            echo "Installing sshpass for password authentication..."
-            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass rsync
-            export SSHPASS="$SSH_PASS"
-            SSH_CMD="sshpass -e ssh -p ${SSH_PORT} -o StrictHostKeyChecking=no"
-            RSYNC_SSH="ssh -p ${SSH_PORT} -o StrictHostKeyChecking=no"
-            DO_RSYNC="sshpass -e rsync"
-          fi
+          # Configure SSH private key authentication
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
 
-          echo "Ensuring remote web directory exists..."
+          # Add host key to known_hosts
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          RSYNC_SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+
+          echo "Ensuring remote directories exist..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p '${WEB_DEST}' '${REPO_DEST}'"
 
           echo "Deploying web app assets to ${WEB_DEST}..."
-          $DO_RSYNC -avz --delete \
+          rsync -avz --delete \
             -e "${RSYNC_SSH}" \
             apps/web/dist/ \
             "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
@@ -101,7 +97,7 @@ jobs:
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chown -R www-data:www-data '${WEB_DEST}' || true"
 
           echo "Syncing repository code to ${REPO_DEST}..."
-          $DO_RSYNC -avz \
+          rsync -avz \
             --exclude 'node_modules' \
             --exclude '.git' \
             --exclude 'data' \
@@ -118,6 +114,9 @@ jobs:
             if systemctl is-active --quiet onest-mint-api 2>/dev/null; then systemctl restart onest-mint-api; fi; \
             if systemctl is-active --quiet wlotus-dana-index 2>/dev/null; then systemctl restart wlotus-dana-index; fi; \
             if systemctl is-active --quiet wlotus-mint-api 2>/dev/null; then systemctl restart wlotus-mint-api; fi"
+
+          # Clean up private key from runner
+          rm -f ~/.ssh/deploy_key
 
           echo "Deployment complete."
 
