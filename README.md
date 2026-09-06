@@ -76,10 +76,10 @@ When a pull request is merged into the `main` branch, the `.github/workflows/dep
 Configure the following secrets in GitHub (**Settings → Secrets and variables → Actions → Secrets**):
 
 - `TEST_SSH_HOST`: IP or domain of the test VM (`154.53.59.31`)
-- `TEST_SSH_USER`: SSH user (`root`)
-- `TEST_SSH_KEY`: The SSH private key generated for passwordless deployment (`ed25519` PEM format)
+- `TEST_SSH_KEY`: The SSH private key generated for deployment (`ed25519` PEM format)
 
 #### Optional Variables / Secrets:
+- `TEST_SSH_USER`: SSH user (default `deploy`, following least-privilege security best practices)
 - `TEST_SSH_PORT`: SSH port (default `22`)
 - `TEST_WEB_PATH`: Web root on VM (default `/var/www/onest-test`)
 - `TEST_REPO_PATH`: Codebase destination on VM (default `/opt/onest`)

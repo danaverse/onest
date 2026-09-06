@@ -45,7 +45,7 @@ jobs:
       - name: Check required deployment secrets
         env:
           SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
-          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'deploy' }}
           SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
         run: |
           missing=0
@@ -65,7 +65,7 @@ jobs:
       - name: Deploy to Test VM
         env:
           SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
-          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'deploy' }}
           SSH_PORT: ${{ secrets.TEST_SSH_PORT || secrets.CONTABO_SSH_PORT || '22' }}
           SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
           WEB_DEST: ${{ vars.TEST_WEB_PATH || secrets.TEST_WEB_PATH || '/var/www/onest-test' }}
@@ -94,7 +94,7 @@ jobs:
             "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
 
           echo "Setting web directory permissions..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chown -R www-data:www-data '${WEB_DEST}' || true"
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "sudo chown -R www-data:www-data '${WEB_DEST}' 2>/dev/null || chown -R www-data:www-data '${WEB_DEST}' 2>/dev/null || true"
 
           echo "Syncing repository code to ${REPO_DEST}..."
           rsync -avz \
@@ -109,11 +109,11 @@ jobs:
 
           echo "Updating backend code permissions and restarting services if present..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            if id deploy >/dev/null 2>&1; then chown -R deploy:deploy '${REPO_DEST}'; fi; \
-            if systemctl is-active --quiet onest-dana-index 2>/dev/null; then systemctl restart onest-dana-index; fi; \
-            if systemctl is-active --quiet onest-mint-api 2>/dev/null; then systemctl restart onest-mint-api; fi; \
-            if systemctl is-active --quiet wlotus-dana-index 2>/dev/null; then systemctl restart wlotus-dana-index; fi; \
-            if systemctl is-active --quiet wlotus-mint-api 2>/dev/null; then systemctl restart wlotus-mint-api; fi"
+            sudo chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true; \
+            sudo systemctl try-restart onest-dana-index 2>/dev/null || systemctl try-restart onest-dana-index 2>/dev/null || true; \
+            sudo systemctl try-restart onest-mint-api 2>/dev/null || systemctl try-restart onest-mint-api 2>/dev/null || true; \
+            sudo systemctl try-restart wlotus-dana-index 2>/dev/null || systemctl try-restart wlotus-dana-index 2>/dev/null || true; \
+            sudo systemctl try-restart wlotus-mint-api 2>/dev/null || systemctl try-restart wlotus-mint-api 2>/dev/null || true"
 
           # Clean up private key from runner
           rm -f ~/.ssh/deploy_key
