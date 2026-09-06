@@ -7,7 +7,7 @@
  *   - Name: Onest
  *   - URL: https://onest.pet
  *   - Batons: 28 PoW remint batons
- *   - Covenant: GlotusPowRemintMooreTip (felt +1 bit)
+ *   - Covenant: WLotusCovenant (felt +1 bit)
  *   - Aligned 1:1 with WLotus:
  *       - genesisUnix: 1788215242 (WLotus live genesis timestamp)
  *       - baseZeroBits: 0 (WLotus starting difficulty)
@@ -22,11 +22,15 @@ import { Address, Script, fromHex, shaRmd160, toHex } from 'ecash-lib';
 import { createChronik } from '../src/network/createChronik.js';
 import { getMedianTimePast } from '../src/network/medianTimePast.js';
 import { broadcastAlpGenesis } from '../src/genesis/broadcastGenesis.js';
-import { createPowRemintGlotusTipContract } from '../src/covenant/powRemintGlotusTipScript.js';
+import {
+  createPowRemintWLotusCovenantContract,
+  createPowRemintGlotusTipContract,
+} from '../src/covenant/powRemintWLotusCovenantScript.js';
 import {
   PAW_MINT_ATOMS,
-  PAW_GLOTUS_COVENANT,
-  PAW_GLOTUS_MODE,
+  PAW_COVENANT,
+  PAW_WLOTUS_COVENANT,
+  PAW_WLOTUS_MODE,
   WLOTUS_GENESIS_UNIX,
   POW_PAW_BASE_ZERO_BITS,
 } from '../src/params/pawMint.js';
@@ -56,7 +60,7 @@ async function main() {
 
   await wallet.sync();
   console.log(`Genesis wallet: ${wallet.address}`);
-  console.log(`Target covenant: ${PAW_GLOTUS_COVENANT}, ticker: ${PAW_TICKER}, name: ${PAW_NAME}`);
+  console.log(`Target covenant: ${PAW_WLOTUS_COVENANT}, ticker: ${PAW_TICKER}, name: ${PAW_NAME}`);
 
   const mtp = await getMedianTimePast(chronik);
   // Baked-in WLotus genesis start time (1788215242, Aug 31, 2026), or env override
@@ -87,7 +91,7 @@ async function main() {
     `Baking covenant with WLotus parameters: genesisUnix=${genesisUnix}, baseZeroBits=${baseZeroBits}, mintAtoms=${PAW_MINT_ATOMS}, secondsPerExtraBit=${secondsPerExtraBit}, tipLocktime=${tipLocktime}`,
   );
 
-  const contract = await createPowRemintGlotusTipContract({
+  const contract = await createPowRemintWLotusCovenantContract({
     tokenId,
     mintAtoms: PAW_MINT_ATOMS,
     genesisUnix,
@@ -107,8 +111,8 @@ async function main() {
     genesisUnix,
     baseZeroBits,
     secondsPerExtraBit,
-    covenant: PAW_GLOTUS_COVENANT,
-    mode: PAW_GLOTUS_MODE,
+    covenant: PAW_WLOTUS_COVENANT,
+    mode: PAW_WLOTUS_MODE,
     powAddress: contract.address,
     powScriptHashHex: toHex(contract.scriptHash),
     redeemHex: contract.redeemHex,

@@ -11,8 +11,14 @@ import { fromHex, toHex, Script } from 'ecash-lib';
 import type { Wallet } from 'ecash-wallet';
 import { createChronik } from '../../../src/network/createChronik.js';
 import { getMedianTimePast } from '../../../src/network/medianTimePast.js';
-import { createPowRemintGlotusTipContract } from '../../../src/covenant/powRemintGlotusTipScript.js';
-import { expectedGlotusMintOpReturnScript } from '../../../src/covenant/powRemintGlotusTipOutputs.js';
+import {
+  createPowRemintWLotusCovenantContract,
+  createPowRemintGlotusTipContract,
+} from '../../../src/covenant/powRemintWLotusCovenantScript.js';
+import {
+  expectedWLotusCovenantMintOpReturnScript,
+  expectedGlotusMintOpReturnScript,
+} from '../../../src/covenant/powRemintWLotusCovenantOutputs.js';
 import {
   buildMooreTipRemintChallenge,
   buildMooreTipRemintTxWithNonce,
@@ -249,7 +255,7 @@ function loadDepJson(): OnestDep {
     tokenId: envToken,
     ticker: 'PAW',
     name: 'Onest',
-    covenant: 'GlotusPowRemintMooreTip',
+    covenant: 'WLotusCovenant',
     mode: 'onest-moore-felt-bit',
     baseZeroBits: POW_PAW_BASE_ZERO_BITS,
     genesisUnix: WLOTUS_GENESIS_UNIX,
@@ -329,7 +335,7 @@ export async function enqueueChallenge(opts: {
     baton,
     [dep.genesisUnix ?? WLOTUS_GENESIS_UNIX],
     async (tipLocktime) => {
-      const c = await createPowRemintGlotusTipContract({
+      const c = await createPowRemintWLotusCovenantContract({
         tokenId: dep.tokenId,
         mintAtoms: PAW_MINT_ATOMS,
         genesisUnix: dep.genesisUnix ?? WLOTUS_GENESIS_UNIX,
@@ -375,7 +381,7 @@ export async function enqueueChallenge(opts: {
     },
     miner: { sk: tipWallet.sk, pk: tipWallet.pk },
     locktime,
-    opReturn: expectedGlotusMintOpReturnScript(dep.tokenId, PAW_MINT_ATOMS),
+    opReturn: expectedWLotusCovenantMintOpReturnScript(dep.tokenId, PAW_MINT_ATOMS),
   });
 
   const challengeId = randomUUID();
