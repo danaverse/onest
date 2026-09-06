@@ -1,6 +1,6 @@
 # Onest (`PAW`)
 
-On-chain animal memorial, paw-print tributes, and ALP PoW minting on eCash.
+Animal memories, paw-print tributes, and ALP PoW minting.
 
 - **Site:** [https://onest.pet](https://onest.pet)
 - **Token:** PAW (`Onest`, URL `https://onest.pet`, ALP standard fungible token with PoW remint batons)

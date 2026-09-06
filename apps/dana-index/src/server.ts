@@ -128,14 +128,17 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && normPath.startsWith('/api/memorial/')) {
-      const txid = normPath.slice('/api/memorial/'.length).trim().toLowerCase();
+    if (req.method === 'GET' && (normPath.startsWith('/api/memorial/') || normPath.startsWith('/api/memory/'))) {
+      const txid = (normPath.startsWith('/api/memorial/')
+        ? normPath.slice('/api/memorial/'.length)
+        : normPath.slice('/api/memory/'.length)
+      ).trim().toLowerCase();
       const group = store.groupForRoot(txid);
       if (!group) {
-        json(res, 404, { error: 'memorial not found' });
+        json(res, 404, { error: 'memory not found' });
         return;
       }
-      json(res, 200, { ok: true, memorial: group });
+      json(res, 200, { ok: true, memory: group, memorial: group });
       return;
     }
 

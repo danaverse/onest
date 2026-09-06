@@ -18,16 +18,22 @@ describe('ogPreview', () => {
     expect(resolveOgLocale({ langParam: 'zh' })).toBe('zh');
   });
 
-  it('builds animal memorial title and description', () => {
+  it('builds animal memory title and description', () => {
     expect(ogCopy('en', 'Milo').title).toBe('In memory of Milo');
+    expect(ogCopy('en', 'Milo').description).toBe('A loving paw-print tribute — recorded forever.');
     expect(ogCopy('vi', 'Milo').title).toBe('Tưởng nhớ Milo');
+    expect(ogCopy('vi', 'Milo').description).toBe('Dấu chân tưởng nhớ thú cưng yêu quý — ghi dấu vĩnh cửu.');
     expect(ogCopy('zh', 'Milo').title).toBe('纪念 Milo');
+    expect(ogCopy('zh', 'Milo').description).toBe('献给挚爱宠物的爪印印记——永远留存。');
   });
 
   it('provides default copy when name is empty', () => {
     expect(ogCopy('en', '').title).toBe('Onest — Loving Animal Memories');
+    expect(ogCopy('en', '').description).toBe('Paw-print animal profile tributes recorded forever.');
     expect(ogCopy('vi', '').title).toBe('Onest — Kết nối yêu thương');
+    expect(ogCopy('vi', '').description).toBe('Lưu giữ ký ức thú cưng và dấu chân vĩnh cửu.');
     expect(ogCopy('zh', '').title).toBe('Onest — 跨越彩虹桥的永恒思念');
+    expect(ogCopy('zh', '').description).toBe('为挚爱宠物点亮永恒的爪印记忆。');
   });
 
   it('builds complete HTML document with OG meta tags', () => {

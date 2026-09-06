@@ -51,8 +51,13 @@ export async function searchProfiles(query: string, limit = 20): Promise<IndexMe
 
 export async function fetchMemorialDetails(txid: string): Promise<IndexMemorialGroup> {
   const base = DANA_INDEX_BASE || '/index-api';
-  const res = await fetch(`${base}/api/memorial/${encodeURIComponent(txid)}`);
-  if (!res.ok) throw new Error(`Memorial HTTP ${res.status}`);
+  const res = await fetch(`${base}/api/memory/${encodeURIComponent(txid)}`);
+  if (!res.ok) {
+    const fallback = await fetch(`${base}/api/memorial/${encodeURIComponent(txid)}`);
+    if (!fallback.ok) throw new Error(`Memory HTTP ${fallback.status}`);
+    const fbData = await fallback.json();
+    return fbData.memory || fbData.memorial;
+  }
   const data = await res.json();
-  return data.memorial;
+  return data.memory || data.memorial;
 }
