@@ -1,0 +1,14 @@
+node_modules/
+dist/
+apps/web/dist/
+.cache/
+.env
+.env.*
+!.env.example
+!apps/web/.env.example
+*.log
+.DS_Store
+coverage/
+data/
+deployments/special-claims.json
+*.tgz
