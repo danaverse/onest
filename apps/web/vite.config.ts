@@ -44,7 +44,7 @@ export default defineConfig({
         id: '/',
         name: 'Onest',
         short_name: 'Onest',
-        description: 'Animal profile and paw-print tributes on eCash',
+        description: 'Loving animal memories and paw-print tributes',
         theme_color: '#0a0a0a',
         background_color: '#050505',
         display: 'standalone',

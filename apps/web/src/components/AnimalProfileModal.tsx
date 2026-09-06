@@ -133,7 +133,7 @@ export function AnimalProfileModal(props: {
             <div className="success-icon">🐾</div>
             <h3>{t('tributeSuccess')}</h3>
             <p className="success-desc">
-              Your paw-print tribute has been immortalized on the eCash blockchain.
+              Your loving paw-print tribute has been preserved forever.
             </p>
             <div className="success-tx-box">
               <span className="tx-label">Transaction ID:</span>
@@ -220,7 +220,7 @@ export function AnimalProfileModal(props: {
               </>
             ) : (
               <div className="tribute-parent-hint">
-                <p>Dedicate a loving paw-print tribute to this animal memorial.</p>
+                <p>Dedicate a loving paw-print tribute to this animal memory.</p>
               </div>
             )}
 
