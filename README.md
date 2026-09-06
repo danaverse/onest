@@ -25,6 +25,16 @@ On-chain animal memorial, paw-print tributes, and ALP PoW minting on eCash.
 └── scripts/          # Genesis & token operation scripts
 ```
 
+## Tokenomics & Covenant Alignment
+
+PAW is designed for 1:1 issuance and difficulty exchangeability with WLotus:
+- **Covenant Model:** `GlotusPowRemintMooreTip` (single-tier felt +1 bit, no temple tax)
+- **Genesis Unix:** `1788215242` (baked-in WLotus mainnet genesis timestamp)
+- **Mint Atoms:** `108` atoms per remint (100% to miner / tip desk)
+- **Base Difficulty:** `0` base zero bits
+- **Clock Speed:** `500` days per extra bit (`43,200,000` seconds)
+- **Batons:** `28` PoW remint batons
+
 ## Setup & Running
 
 Install dependencies:
