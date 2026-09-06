@@ -2,9 +2,9 @@ import {
   PAW_MINT_ATOMS,
   PAW_MINER_ATOMS,
   PAW_FELT_COVENANT,
-  PAW_MOORE_TIP_COVENANT,
+  PAW_GLOTUS_COVENANT,
   isPawFeltCovenant,
-  isPawMooreTipCovenant,
+  isPawGlotusCovenant,
   resolvePawGenesisRegime,
 } from '../src/params/pawMint.js';
 import {
@@ -13,7 +13,7 @@ import {
   PAW_URL,
 } from '../src/params/consensus.js';
 
-describe('pawMint & consensus', () => {
+describe('pawMint & consensus (GLotus model only)', () => {
   it('has matching 100 atoms for both mint and miner with no temple tax', () => {
     expect(PAW_MINT_ATOMS).toBe(100n);
     expect(PAW_MINER_ATOMS).toBe(100n);
@@ -26,16 +26,15 @@ describe('pawMint & consensus', () => {
     expect(PAW_URL).toBe('https://onest.pet');
   });
 
-  it('identifies covenants correctly', () => {
+  it('identifies GLotus covenant correctly', () => {
     expect(isPawFeltCovenant({ covenant: PAW_FELT_COVENANT })).toBe(true);
-    expect(isPawMooreTipCovenant({ covenant: PAW_MOORE_TIP_COVENANT })).toBe(true);
+    expect(isPawGlotusCovenant({ covenant: PAW_GLOTUS_COVENANT })).toBe(true);
+    expect(isPawFeltCovenant({ covenant: 'WlotusPowRemintMooreTip' })).toBe(false);
     expect(isPawFeltCovenant({ covenant: 'Unknown' })).toBe(false);
   });
 
-  it('resolves regimes according to env', () => {
-    expect(resolvePawGenesisRegime({ REGIME: 'felt' })).toBe('felt');
-    expect(resolvePawGenesisRegime({ REGIME: 'moore-tip' })).toBe('moore-tip');
-    expect(resolvePawGenesisRegime({ REGIME: 'memo' })).toBe('memo');
-    expect(resolvePawGenesisRegime({})).toBe('felt');
+  it('resolves regime to GLotus felt', () => {
+    expect(resolvePawGenesisRegime({ REGIME: 'felt' })).toBe('glotus');
+    expect(resolvePawGenesisRegime({})).toBe('glotus');
   });
 });

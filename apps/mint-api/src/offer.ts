@@ -11,23 +11,14 @@ import { fromHex, toHex, Script } from 'ecash-lib';
 import type { Wallet } from 'ecash-wallet';
 import { createChronik } from '../../../src/network/createChronik.js';
 import { getMedianTimePast } from '../../../src/network/medianTimePast.js';
-import { createPowRemintMooreTipMemoContract } from '../../../src/covenant/powRemintMooreTipMemoScript.js';
-import { createPowRemintMooreTipContract } from '../../../src/covenant/powRemintMooreTipScript.js';
 import { createPowRemintGlotusTipContract } from '../../../src/covenant/powRemintGlotusTipScript.js';
 import { expectedGlotusMintOpReturnScript } from '../../../src/covenant/powRemintGlotusTipOutputs.js';
-import {
-  buildMooreTipMemoRemintChallenge,
-  buildMooreTipMemoRemintTxWithNonce,
-  MOORE_TIP_MEMO_NONCE_LENGTH,
-  MOORE_TIP_MEMO_POW_COMMIT,
-  parseNonceHex,
-  type MooreTipMemoRemintPrepared,
-} from '../../../src/miner/remintMooreTipMemo.js';
 import {
   buildMooreTipRemintChallenge,
   buildMooreTipRemintTxWithNonce,
   MOORE_TIP_NONCE_LENGTH,
   MOORE_TIP_POW_COMMIT,
+  parseNonceHex,
   type MooreTipRemintPrepared,
 } from '../../../src/miner/remintMooreTip.js';
 import {
@@ -48,7 +39,6 @@ import {
   PAW_MINT_ATOMS,
   PAW_MINER_ATOMS,
   isPawFeltCovenant,
-  isPawMooreTipCovenant,
 } from '../../../src/params/pawMint.js';
 import {
   assertDeskTokenId,
@@ -154,9 +144,7 @@ export interface ChallengePublic {
   expiresAt: string;
   tokenId: string;
   bits: number;
-  commit:
-    | typeof MOORE_TIP_MEMO_POW_COMMIT
-    | typeof MOORE_TIP_POW_COMMIT;
+  commit: typeof MOORE_TIP_POW_COMMIT;
   nonceLength: number;
   preimageHex: string;
   powPrefixHex: string;
@@ -177,12 +165,12 @@ interface ActiveChallenge {
   createdAt: number;
   expiresAt: number;
   status: 'open' | 'submitted' | 'expired';
-  mode: 'felt' | 'moore-tip' | 'memo';
+  mode: 'felt';
   tokenId: string;
   tipKey: string;
   tipIndex: number;
   locktime: number;
-  prepared: MooreTipRemintPrepared | MooreTipMemoRemintPrepared;
+  prepared: MooreTipRemintPrepared;
   note: string;
   parentBurnTxid?: string;
 }

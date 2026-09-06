@@ -1,11 +1,16 @@
 /**
- * GLotus MooreTip factory — same econHead layout as WlotusPowRemintMooreTip,
- * felt +1 bit (no whole-byte guard), ALP MINT only.
+ * GLotus MooreTip factory — felt +1 bit (no whole-byte guard), ALP MINT only.
+ * Smart covenant for Onest (PAW) reminting on eCash.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Spedn } from '@spedn/sdk';
-import { ModuleFactory, type PortableModule } from '@spedn/rts';
+import {
+  ModuleFactory,
+  type Instance,
+  type PortableModule,
+  type Challenges,
+} from '@spedn/rts';
 import { BchJsRts } from '@spedn/rts-bchjs';
 import {
   Address,
@@ -16,16 +21,42 @@ import {
   Script as EcashScript,
 } from 'ecash-lib';
 import {
-  buildEconHead,
-  findTipValueOffset,
-  reconstructNextRedeem,
-  MOORE_TIP_ECON_HEAD_LEN,
-  type PowRemintMooreTipContract,
-  type PowRemintMooreTipParams,
-  type PowMooreTipInstance,
-} from './powRemintMooreTipScript.js';
+  PROD_SECONDS_PER_EXTRA_BIT,
+  type MooreTipParams,
+} from './mooreTip.js';
 
-export type PowRemintGlotusTipContract = PowRemintMooreTipContract;
+export interface PowRemintGlotusTipParams extends MooreTipParams {
+  tokenId: string;
+  mintAtoms: bigint;
+}
+
+export type PowRemintMooreTipParams = PowRemintGlotusTipParams;
+
+export type PowGlotusTipInstance = Instance & { challenges: Challenges };
+export type PowMooreTipInstance = PowGlotusTipInstance;
+
+export interface PowRemintGlotusTipContract {
+  params: PowRemintGlotusTipParams;
+  instance: PowGlotusTipInstance;
+  redeem: EcashScript;
+  redeemScriptBuf: Buffer;
+  scriptHash: Uint8Array;
+  p2shScript: EcashScript;
+  address: string;
+  redeemHex: string;
+  codeBytes: Buffer;
+  codeHash: Uint8Array;
+  prefixHash: Uint8Array;
+  tipValueOffset: number;
+}
+
+export type PowRemintMooreTipContract = PowRemintGlotusTipContract;
+
+/** econHead through codeHash; tip opcode at 85+33=118, tip value at 119. */
+export const GLOTUS_ECON_HEAD_LEN = 85;
+export const MOORE_TIP_ECON_HEAD_LEN = 85;
+export const GLOTUS_VALUE_OFFSET = 119;
+export const MOORE_TIP_VALUE_OFFSET = 119;
 
 let cachedPortable: PortableModule | undefined;
 
@@ -60,8 +91,28 @@ function u32LeBuf(n: number): Buffer {
   return buf;
 }
 
+export function buildEconHead(
+  params: PowRemintGlotusTipParams,
+  codeHash: Buffer | Uint8Array,
+): Buffer {
+  return Buffer.concat([
+    Buffer.from([0x20]),
+    Buffer.from(fromHexRev(params.tokenId)),
+    Buffer.from([0x06]),
+    mintAtomsLe6(params.mintAtoms),
+    Buffer.from([0x04]),
+    u32LeBuf(params.genesisUnix),
+    Buffer.from([0x01]),
+    Buffer.from([params.baseZeroBits & 0xff]),
+    Buffer.from([0x04]),
+    u32LeBuf(params.secondsPerExtraBit),
+    Buffer.from([0x20]),
+    Buffer.from(codeHash),
+  ]);
+}
+
 function ctorArgs(
-  params: PowRemintMooreTipParams,
+  params: PowRemintGlotusTipParams,
   codeHash: Buffer,
   prefixHash: Buffer,
 ): Record<string, Buffer> {
@@ -84,21 +135,45 @@ function ctorArgs(
   };
 }
 
-function instantiate(
-  portable: PortableModule,
-  params: PowRemintMooreTipParams,
+export function findTipValueOffset(
+  redeem: Buffer,
+  tipLocktime: number,
   codeHash: Buffer,
   prefixHash: Buffer,
-): PowMooreTipInstance {
+): number {
+  const tipLe = u32LeBuf(tipLocktime);
+  const marker = Buffer.concat([
+    Buffer.from([0x20]),
+    codeHash,
+    Buffer.from([0x20]),
+    prefixHash,
+    Buffer.from([0x04]),
+    tipLe,
+  ]);
+  const at = redeem.indexOf(marker);
+  if (at < 0) throw new Error('tip marker not found');
+  const off = at + 1 + 32 + 1 + 32 + 1;
+  if (off !== GLOTUS_VALUE_OFFSET) {
+    throw new Error(`tipValueOffset ${off} != ${GLOTUS_VALUE_OFFSET}`);
+  }
+  return off;
+}
+
+function instantiate(
+  portable: PortableModule,
+  params: PowRemintGlotusTipParams,
+  codeHash: Buffer,
+  prefixHash: Buffer,
+): PowGlotusTipInstance {
   const factory = new ModuleFactory(new BchJsRts('mainnet'));
   const Ctor = factory.make(portable).GlotusPowRemintMooreTip;
   return new Ctor(
     ctorArgs(params, codeHash, prefixHash),
-  ) as PowMooreTipInstance;
+  ) as PowGlotusTipInstance;
 }
 
 export async function createPowRemintGlotusTipContract(
-  params: PowRemintMooreTipParams,
+  params: PowRemintGlotusTipParams,
 ): Promise<PowRemintGlotusTipContract> {
   const portable = await loadPortable();
   const z = Buffer.alloc(32, 0);
@@ -133,7 +208,7 @@ export async function createPowRemintGlotusTipContract(
   }
   if (
     !Buffer.from(
-      sha256(redeemScriptBuf.subarray(0, MOORE_TIP_ECON_HEAD_LEN)),
+      sha256(redeemScriptBuf.subarray(0, GLOTUS_ECON_HEAD_LEN)),
     ).equals(prefixHash)
   ) {
     throw new Error('prefixHash mismatch');
@@ -173,4 +248,55 @@ export async function createPowRemintGlotusTipContract(
   };
 }
 
-export { reconstructNextRedeem };
+export function reconstructNextRedeem(
+  params: PowRemintGlotusTipParams,
+  codeHash: Buffer | Uint8Array,
+  prefixHash: Buffer | Uint8Array,
+  codeBytes: Buffer | Uint8Array,
+  nextTipLocktime: number,
+): Buffer {
+  return Buffer.concat([
+    buildEconHead(params, codeHash),
+    Buffer.from([0x20]),
+    Buffer.from(prefixHash),
+    Buffer.from([0x04]),
+    u32LeBuf(nextTipLocktime),
+    Buffer.from(codeBytes),
+  ]);
+}
+
+export async function glotusTipContractForNextTip(
+  current: PowRemintGlotusTipContract,
+  nextTipLocktime: number,
+): Promise<PowRemintGlotusTipContract> {
+  return createPowRemintGlotusTipContract({
+    ...current.params,
+    tipLocktime: nextTipLocktime,
+  });
+}
+
+export const mooreTipContractForNextTip = glotusTipContractForNextTip;
+export const createPowRemintMooreTipContract = createPowRemintGlotusTipContract;
+
+export function defaultGlotusTipParams(
+  tokenId: string,
+  genesisUnix: number,
+  opts: {
+    mintAtoms: bigint;
+    baseZeroBits: number;
+    tipLocktime?: number;
+    secondsPerExtraBit?: number;
+  },
+): PowRemintGlotusTipParams {
+  return {
+    tokenId,
+    mintAtoms: opts.mintAtoms,
+    genesisUnix,
+    baseZeroBits: opts.baseZeroBits,
+    secondsPerExtraBit:
+      opts.secondsPerExtraBit ?? PROD_SECONDS_PER_EXTRA_BIT,
+    tipLocktime: opts.tipLocktime ?? genesisUnix,
+  };
+}
+
+export const defaultMooreTipParams = defaultGlotusTipParams;

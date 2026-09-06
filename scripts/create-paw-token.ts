@@ -18,10 +18,10 @@ import { createChronik } from '../src/network/createChronik.js';
 import { getMedianTimePast } from '../src/network/medianTimePast.js';
 import { broadcastAlpGenesis } from '../src/genesis/broadcastGenesis.js';
 import { createPowRemintGlotusTipContract } from '../src/covenant/powRemintGlotusTipScript.js';
-import { createPowRemintMooreTipContract } from '../src/covenant/powRemintMooreTipScript.js';
 import {
   PAW_MINT_ATOMS,
-  resolvePawGenesisRegime,
+  PAW_GLOTUS_COVENANT,
+  PAW_GLOTUS_MODE,
 } from '../src/params/pawMint.js';
 import {
   POW_BATON_COUNT,
@@ -50,9 +50,7 @@ async function main() {
 
   await wallet.sync();
   console.log(`Genesis wallet: ${wallet.address}`);
-
-  const regime = resolvePawGenesisRegime();
-  console.log(`Target regime: ${regime}, ticker: ${PAW_TICKER}, name: ${PAW_NAME}`);
+  console.log(`Target covenant: ${PAW_GLOTUS_COVENANT}, ticker: ${PAW_TICKER}, name: ${PAW_NAME}`);
 
   const mtp = await getMedianTimePast(chronik);
   const genesisUnix = mtp.mtp;
@@ -72,23 +70,14 @@ async function main() {
   const secondsPerExtraBit = resolveFeltSecondsPerExtraBit();
   const baseZeroBits = POW_PAW_BASE_ZERO_BITS;
 
-  const contract = regime === 'felt'
-    ? await createPowRemintGlotusTipContract({
-        tokenId,
-        mintAtoms: PAW_MINT_ATOMS,
-        genesisUnix,
-        baseZeroBits,
-        secondsPerExtraBit,
-        tipLocktime: genesisUnix,
-      })
-    : await createPowRemintMooreTipContract({
-        tokenId,
-        mintAtoms: PAW_MINT_ATOMS,
-        genesisUnix,
-        baseZeroBits,
-        secondsPerExtraBit,
-        tipLocktime: genesisUnix,
-      });
+  const contract = await createPowRemintGlotusTipContract({
+    tokenId,
+    mintAtoms: PAW_MINT_ATOMS,
+    genesisUnix,
+    baseZeroBits,
+    secondsPerExtraBit,
+    tipLocktime: genesisUnix,
+  });
 
   console.log(`Covenant P2SH address: ${contract.address}`);
 
@@ -101,7 +90,8 @@ async function main() {
     genesisUnix,
     baseZeroBits,
     secondsPerExtraBit,
-    covenant: contract.params ? regime : 'felt',
+    covenant: PAW_GLOTUS_COVENANT,
+    mode: PAW_GLOTUS_MODE,
     powAddress: contract.address,
     powScriptHashHex: toHex(contract.scriptHash),
     redeemHex: contract.redeemHex,

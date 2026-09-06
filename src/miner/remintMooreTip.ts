@@ -18,11 +18,12 @@ import {
   type Signatory,
 } from 'ecash-lib';
 import {
-  createPowRemintMooreTipContract,
+  createPowRemintGlotusTipContract,
   reconstructNextRedeem,
+  type PowRemintGlotusTipContract,
   type PowRemintMooreTipContract,
-} from '../covenant/powRemintMooreTipScript.js';
-import { expectedMooreTipMintOpReturnScript } from '../covenant/powRemintMooreTipOutputs.js';
+} from '../covenant/powRemintGlotusTipScript.js';
+import { expectedGlotusMintOpReturnScript } from '../covenant/powRemintGlotusTipOutputs.js';
 import { minePowBits, verifyPowBits } from '../covenant/minePow.js';
 import {
   computeMooreTipState,
@@ -52,12 +53,12 @@ export const MOORE_TIP_CODESEP_INDEX = 0;
 export const MOORE_TIP_NONCE_LENGTH = 4;
 export const MOORE_TIP_POW_COMMIT = 'sha256-preimage' as const;
 
-export function mooreTipMinerBanner(
-  contract: PowRemintMooreTipContract,
+export function glotusMinerBanner(
+  contract: PowRemintGlotusTipContract,
 ): string {
   const p = contract.params;
   return [
-    'MooreTip production miner',
+    'GLotus production miner',
     `baseZeroBits=${p.baseZeroBits}`,
     `secondsPerExtraBit=${p.secondsPerExtraBit}`,
     `tipLocktime=${p.tipLocktime}`,
@@ -66,14 +67,16 @@ export function mooreTipMinerBanner(
   ].join(' | ');
 }
 
+export const mooreTipMinerBanner = glotusMinerBanner;
+
 export interface MooreTipRemintPrepared {
-  contract: PowRemintMooreTipContract;
+  contract: PowRemintGlotusTipContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
   tip: MooreTipState;
-  nextContract: PowRemintMooreTipContract;
+  nextContract: PowRemintGlotusTipContract;
   nextRedeem: Buffer;
   opReturn: Script;
   minerP2pkh: Script;
@@ -86,31 +89,32 @@ export interface MooreTipRemintPrepared {
   powPrefixHex: string;
 }
 
+export type GlotusRemintPrepared = MooreTipRemintPrepared;
+
 async function prepareMooreTipRemint(opts: {
-  contract: PowRemintMooreTipContract;
+  contract: PowRemintGlotusTipContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
-  /** When set, skip DANA tip reconstruction (GLotus ALP-only mint). */
+  /** When set, override the OP_RETURN script. Defaults to GLotus ALP mint. */
   opReturn?: Script;
-  nextContract?: PowRemintMooreTipContract;
+  nextContract?: PowRemintGlotusTipContract;
 }): Promise<MooreTipRemintPrepared> {
   const { contract, baton, fuel, miner, locktime } = opts;
   const dust = DEFAULT_DUST_SATS;
   const tip = computeMooreTipState(locktime, contract.params);
   const nextContract =
     opts.nextContract ??
-    (await createPowRemintMooreTipContract({
+    (await createPowRemintGlotusTipContract({
       ...contract.params,
       tipLocktime: tip.locktime,
     }));
   const opReturn =
     opts.opReturn ??
-    expectedMooreTipMintOpReturnScript(
+    expectedGlotusMintOpReturnScript(
       contract.params.tokenId,
       contract.params.mintAtoms,
-      tip,
     );
   const minerP2pkh = Script.p2pkh(shaRmd160(miner.pk));
   const nextRedeem = reconstructNextRedeem(
@@ -179,16 +183,18 @@ async function prepareMooreTipRemint(opts: {
 
 /** Build challenge material (preimage) without mining. */
 export async function buildMooreTipRemintChallenge(opts: {
-  contract: PowRemintMooreTipContract;
+  contract: PowRemintGlotusTipContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
   opReturn?: Script;
-  nextContract?: PowRemintMooreTipContract;
+  nextContract?: PowRemintGlotusTipContract;
 }): Promise<MooreTipRemintPrepared> {
   return prepareMooreTipRemint(opts);
 }
+
+export const buildGlotusRemintChallenge = buildMooreTipRemintChallenge;
 
 /** Sign + serialize remint using a client-mined nonce (server verifies first). */
 export async function buildMooreTipRemintTxWithNonce(opts: {
@@ -199,7 +205,7 @@ export async function buildMooreTipRemintTxWithNonce(opts: {
   nonceHex: string;
   tip: MooreTipState;
   locktime: number;
-  nextContract: PowRemintMooreTipContract;
+  nextContract: PowRemintGlotusTipContract;
   mintAtoms: string;
 }> {
   const { prepared, nonce } = opts;
@@ -312,15 +318,17 @@ export async function buildMooreTipRemintTxWithNonce(opts: {
   };
 }
 
+export const buildGlotusRemintTxWithNonce = buildMooreTipRemintTxWithNonce;
+
 /** Mine + finalize (CLI / server fallback). */
 export async function buildMinedMooreTipRemintTx(opts: {
-  contract: PowRemintMooreTipContract;
+  contract: PowRemintGlotusTipContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
   opReturn?: Script;
-  nextContract?: PowRemintMooreTipContract;
+  nextContract?: PowRemintGlotusTipContract;
 }): Promise<{
   txHex: string;
   nonceHex: string;
@@ -329,7 +337,7 @@ export async function buildMinedMooreTipRemintTx(opts: {
   mintAtoms: string;
   tip: MooreTipState;
   locktime: number;
-  nextContract: PowRemintMooreTipContract;
+  nextContract: PowRemintGlotusTipContract;
 }> {
   const prepared = await prepareMooreTipRemint(opts);
   const t0 = Date.now();
@@ -350,6 +358,8 @@ export async function buildMinedMooreTipRemintTx(opts: {
     powMs,
   };
 }
+
+export const buildMinedGlotusRemintTx = buildMinedMooreTipRemintTx;
 
 export function parseNonceHex(nonceHex: string): Uint8Array {
   const cleaned = nonceHex.trim().toLowerCase().replace(/^0x/, '');
