@@ -22,6 +22,9 @@ import {
   type MooreTipRemintPrepared,
 } from '../../../src/miner/remintMooreTip.js';
 import {
+  computeMooreTipState,
+} from '../../../src/covenant/mooreTip.js';
+import {
   burnOnePaw,
   explorerTx,
   memorialPushdata,
@@ -38,6 +41,8 @@ import {
 import {
   PAW_MINT_ATOMS,
   PAW_MINER_ATOMS,
+  WLOTUS_GENESIS_UNIX,
+  POW_PAW_BASE_ZERO_BITS,
   isPawFeltCovenant,
 } from '../../../src/params/pawMint.js';
 import {
@@ -246,6 +251,9 @@ function loadDepJson(): OnestDep {
     name: 'Onest',
     covenant: 'GlotusPowRemintMooreTip',
     mode: 'onest-moore-felt-bit',
+    baseZeroBits: POW_PAW_BASE_ZERO_BITS,
+    genesisUnix: WLOTUS_GENESIS_UNIX,
+    secondsPerExtraBit: 500 * 86_400,
   };
 }
 
@@ -280,7 +288,7 @@ export function publicStatus(installId?: string) {
     ticker: dep.ticker || 'PAW',
     maxOffersPerDay: MAX_OFFERS_PER_DAY,
     remainingToday: installId ? dailyOffers.remaining(installId) : null,
-    baseZeroBits: dep.baseZeroBits ?? 22,
+    baseZeroBits: dep.baseZeroBits ?? POW_PAW_BASE_ZERO_BITS,
     clientPow: true,
     maxOpenChallenges: MAX_OPEN_CHALLENGES,
     openChallenges: challenges.size,
@@ -320,8 +328,8 @@ export async function enqueueChallenge(opts: {
   const contract = await createPowRemintGlotusTipContract({
     tokenId: dep.tokenId,
     mintAtoms: PAW_MINT_ATOMS,
-    genesisUnix: dep.genesisUnix || 0,
-    baseZeroBits: dep.baseZeroBits || 22,
+    genesisUnix: dep.genesisUnix ?? WLOTUS_GENESIS_UNIX,
+    baseZeroBits: dep.baseZeroBits ?? POW_PAW_BASE_ZERO_BITS,
     secondsPerExtraBit: dep.secondsPerExtraBit || (500 * 86_400),
     tipLocktime: baton.creatingLockTime,
   });
@@ -358,6 +366,7 @@ export async function enqueueChallenge(opts: {
   const challengeId = randomUUID();
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
   const note = opts.note ? prepareDanaNote(opts.note, Boolean(opts.parentBurnTxid)) : '';
+  const tipState = computeMooreTipState(locktime, contract.params);
 
   const active: ActiveChallenge = {
     id: challengeId,
@@ -382,7 +391,7 @@ export async function enqueueChallenge(opts: {
     challengeId,
     expiresAt: new Date(expiresAt).toISOString(),
     tokenId: dep.tokenId,
-    bits: contract.params ? 22 : 22,
+    bits: tipState.bits,
     commit: MOORE_TIP_POW_COMMIT,
     nonceLength: 4,
     preimageHex: '',
@@ -435,7 +444,7 @@ export async function enqueueSubmit(opts: {
     burnPending: true,
     burnToken,
     tokenId: ch.tokenId,
-    bits: 22,
+    bits: ch.prepared?.tip?.bits ?? 0,
     powAttempts: opts.powAttempts || 1000,
     powMs: opts.powMs || 500,
     hashrateHps: 2000,
