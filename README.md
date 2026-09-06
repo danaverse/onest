@@ -28,7 +28,7 @@ On-chain animal memorial, paw-print tributes, and ALP PoW minting on eCash.
 ## Tokenomics & Covenant Alignment
 
 PAW is designed for 1:1 issuance and difficulty exchangeability with WLotus:
-- **Covenant Model:** `GlotusPowRemintMooreTip` (single-tier felt +1 bit, no temple tax)
+- **Covenant Model:** `WLotusCovenant` (standard Moore 2× felt +1 bit, single-tier, no temple tax)
 - **Genesis Unix:** `1788215242` (baked-in WLotus mainnet genesis timestamp)
 - **Mint Atoms:** `108` atoms per remint (100% to miner / tip desk)
 - **Base Difficulty:** `0` base zero bits

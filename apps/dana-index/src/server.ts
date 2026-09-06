@@ -88,7 +88,13 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host || 'localhost'}`);
 
   try {
-    if (req.method === 'GET' && url.pathname === '/health') {
+    const normPath = url.pathname.startsWith('/index-api/')
+      ? url.pathname.slice('/index-api'.length)
+      : url.pathname === '/index-api'
+        ? '/'
+        : url.pathname;
+
+    if (req.method === 'GET' && (normPath === '/health' || url.pathname === '/health')) {
       json(res, 200, {
         ok: true,
         service: 'onest-dana-index',
@@ -99,13 +105,13 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/recent') {
+    if (req.method === 'GET' && normPath === '/api/recent') {
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 40)));
       json(res, 200, { ok: true, burns: store.recent(limit) });
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/trending') {
+    if (req.method === 'GET' && normPath === '/api/trending') {
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 8)));
       json(res, 200, {
         ok: true,
@@ -115,15 +121,15 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/search') {
+    if (req.method === 'GET' && normPath === '/api/search') {
       const q = (url.searchParams.get('q') || '').trim();
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
       json(res, 200, { ok: true, results: store.search(q, limit) });
       return;
     }
 
-    if (req.method === 'GET' && url.pathname.startsWith('/api/memorial/')) {
-      const txid = url.pathname.slice('/api/memorial/'.length).trim().toLowerCase();
+    if (req.method === 'GET' && normPath.startsWith('/api/memorial/')) {
+      const txid = normPath.slice('/api/memorial/'.length).trim().toLowerCase();
       const group = store.groupForRoot(txid);
       if (!group) {
         json(res, 404, { error: 'memorial not found' });
@@ -133,8 +139,8 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && (url.pathname.startsWith('/og/') || /^\/[0-9a-fA-F]{64}$/.test(url.pathname))) {
-      const txid = url.pathname.replace(/^\/og\//, '').replace(/^\//, '').trim().toLowerCase();
+    if (req.method === 'GET' && (normPath.startsWith('/og/') || /^\/[0-9a-fA-F]{64}$/.test(normPath))) {
+      const txid = normPath.replace(/^\/og\//, '').replace(/^\//, '').trim().toLowerCase();
       const item = store.get(txid);
       const note = item ? item.note : '';
       const locale = resolveOgLocale({
@@ -151,7 +157,7 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/notify') {
+    if (req.method === 'POST' && (normPath === '/api/notify' || url.pathname === '/api/notify')) {
       if (!allowIndexNotify(req, NOTIFY_SECRET)) {
         json(res, 403, { error: 'forbidden' });
         return;

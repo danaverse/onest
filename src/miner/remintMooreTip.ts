@@ -18,12 +18,17 @@ import {
   type Signatory,
 } from 'ecash-lib';
 import {
+  createPowRemintWLotusCovenantContract,
   createPowRemintGlotusTipContract,
   reconstructNextRedeem,
+  type PowRemintWLotusCovenantContract,
   type PowRemintGlotusTipContract,
   type PowRemintMooreTipContract,
-} from '../covenant/powRemintGlotusTipScript.js';
-import { expectedGlotusMintOpReturnScript } from '../covenant/powRemintGlotusTipOutputs.js';
+} from '../covenant/powRemintWLotusCovenantScript.js';
+import {
+  expectedWLotusCovenantMintOpReturnScript,
+  expectedGlotusMintOpReturnScript,
+} from '../covenant/powRemintWLotusCovenantOutputs.js';
 import { minePowBits, verifyPowBits } from '../covenant/minePow.js';
 import {
   computeMooreTipState,
@@ -53,12 +58,12 @@ export const MOORE_TIP_CODESEP_INDEX = 0;
 export const MOORE_TIP_NONCE_LENGTH = 4;
 export const MOORE_TIP_POW_COMMIT = 'sha256-preimage' as const;
 
-export function glotusMinerBanner(
-  contract: PowRemintGlotusTipContract,
+export function wlotusCovenantMinerBanner(
+  contract: PowRemintWLotusCovenantContract,
 ): string {
   const p = contract.params;
   return [
-    'GLotus production miner',
+    'WLotusCovenant production miner',
     `baseZeroBits=${p.baseZeroBits}`,
     `secondsPerExtraBit=${p.secondsPerExtraBit}`,
     `tipLocktime=${p.tipLocktime}`,
@@ -67,16 +72,17 @@ export function glotusMinerBanner(
   ].join(' | ');
 }
 
-export const mooreTipMinerBanner = glotusMinerBanner;
+export const glotusMinerBanner = wlotusCovenantMinerBanner;
+export const mooreTipMinerBanner = wlotusCovenantMinerBanner;
 
 export interface MooreTipRemintPrepared {
-  contract: PowRemintGlotusTipContract;
+  contract: PowRemintWLotusCovenantContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
   tip: MooreTipState;
-  nextContract: PowRemintGlotusTipContract;
+  nextContract: PowRemintWLotusCovenantContract;
   nextRedeem: Buffer;
   opReturn: Script;
   minerP2pkh: Script;
@@ -89,30 +95,31 @@ export interface MooreTipRemintPrepared {
   powPrefixHex: string;
 }
 
+export type WLotusCovenantRemintPrepared = MooreTipRemintPrepared;
 export type GlotusRemintPrepared = MooreTipRemintPrepared;
 
 async function prepareMooreTipRemint(opts: {
-  contract: PowRemintGlotusTipContract;
+  contract: PowRemintWLotusCovenantContract;
   baton: BatonUtxo;
   fuel: FuelUtxo;
   miner: RemintKeys;
   locktime: number;
-  /** When set, override the OP_RETURN script. Defaults to GLotus ALP mint. */
+  /** When set, override the OP_RETURN script. Defaults to ALP mint. */
   opReturn?: Script;
-  nextContract?: PowRemintGlotusTipContract;
+  nextContract?: PowRemintWLotusCovenantContract;
 }): Promise<MooreTipRemintPrepared> {
   const { contract, baton, fuel, miner, locktime } = opts;
   const dust = DEFAULT_DUST_SATS;
   const tip = computeMooreTipState(locktime, contract.params);
   const nextContract =
     opts.nextContract ??
-    (await createPowRemintGlotusTipContract({
+    (await createPowRemintWLotusCovenantContract({
       ...contract.params,
       tipLocktime: tip.locktime,
     }));
   const opReturn =
     opts.opReturn ??
-    expectedGlotusMintOpReturnScript(
+    expectedWLotusCovenantMintOpReturnScript(
       contract.params.tokenId,
       contract.params.mintAtoms,
     );
@@ -194,6 +201,7 @@ export async function buildMooreTipRemintChallenge(opts: {
   return prepareMooreTipRemint(opts);
 }
 
+export const buildWLotusCovenantRemintChallenge = buildMooreTipRemintChallenge;
 export const buildGlotusRemintChallenge = buildMooreTipRemintChallenge;
 
 /** Sign + serialize remint using a client-mined nonce (server verifies first). */
@@ -318,6 +326,7 @@ export async function buildMooreTipRemintTxWithNonce(opts: {
   };
 }
 
+export const buildWLotusCovenantRemintTxWithNonce = buildMooreTipRemintTxWithNonce;
 export const buildGlotusRemintTxWithNonce = buildMooreTipRemintTxWithNonce;
 
 /** Mine + finalize (CLI / server fallback). */
@@ -359,6 +368,7 @@ export async function buildMinedMooreTipRemintTx(opts: {
   };
 }
 
+export const buildMinedWLotusCovenantRemintTx = buildMinedMooreTipRemintTx;
 export const buildMinedGlotusRemintTx = buildMinedMooreTipRemintTx;
 
 export function parseNonceHex(nonceHex: string): Uint8Array {

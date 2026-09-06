@@ -167,10 +167,12 @@ export class BurnStore {
     return out;
   }
 
-  groupForRoot(rootTxid: string): MemorialGroup | null {
-    const root = rootTxid.toLowerCase();
+  groupForRoot(txid: string): MemorialGroup | null {
+    const id = txid.toLowerCase();
+    const item = this.get(id);
+    const targetRoot = item?.originalBurnTxid?.toLowerCase() || id;
     const all = this.groups();
-    return all.find(g => g.originalBurnTxid === root) || null;
+    return all.find(g => g.originalBurnTxid.toLowerCase() === targetRoot) || null;
   }
 
   trending(limit = 8, nowMs = Date.now()): TrendingGroup[] {

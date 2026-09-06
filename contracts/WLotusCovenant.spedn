@@ -1,13 +1,11 @@
-// GLotus remint: fixed mint, Moore 2× (felt +1 bit), hard next-P2SH.
+// WLotusCovenant: standard Moore 2× remint covenant (felt +1 bit), hard next-P2SH.
 // Redeem ≤520; non-push ops ≤201.
 // Felt +1 bit via 8×2-byte LE thresholds (no OP_MUL, no IF). remBits=0
 // limit is 256. Drop extra EMPP DANA tip — ALP MINT only — to fit 201.
-// Intra-era mantissa (8-slot / daily) does not fit with next-P2SH.
-// Bake secondsPerExtraBit = 845 * 86400 at genesis (Ergon 2× ≈ 2.31y).
 // Layout: econHead(85) | 0x20 prefixHash | 0x04 tipLe | codeBytes
 // CODESEPARATOR keeps BIP143 preimage small.
 
-contract GlotusPowRemintMooreTip(
+contract WLotusCovenant(
     [byte;32] tokenIdRev,
     [byte;6] mintAtomsLe,
     [byte;4] genesisUnixLe,
