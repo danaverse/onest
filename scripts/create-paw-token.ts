@@ -8,6 +8,11 @@
  *   - URL: https://onest.pet
  *   - Batons: 28 PoW remint batons
  *   - Covenant: GlotusPowRemintMooreTip (felt +1 bit)
+ *   - Aligned 1:1 with WLotus:
+ *       - genesisUnix: 1788215242 (WLotus live genesis timestamp)
+ *       - baseZeroBits: 0 (WLotus starting difficulty)
+ *       - mintAtoms: 108 (WLotus 108 atoms per remint)
+ *       - secondsPerExtraBit: 43200000 (500 days per bit)
  */
 import { resolve } from 'node:path';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -22,10 +27,11 @@ import {
   PAW_MINT_ATOMS,
   PAW_GLOTUS_COVENANT,
   PAW_GLOTUS_MODE,
+  WLOTUS_GENESIS_UNIX,
+  POW_PAW_BASE_ZERO_BITS,
 } from '../src/params/pawMint.js';
 import {
   POW_BATON_COUNT,
-  POW_PAW_BASE_ZERO_BITS,
   PAW_NAME,
   PAW_TICKER,
   PAW_URL,
@@ -53,7 +59,14 @@ async function main() {
   console.log(`Target covenant: ${PAW_GLOTUS_COVENANT}, ticker: ${PAW_TICKER}, name: ${PAW_NAME}`);
 
   const mtp = await getMedianTimePast(chronik);
-  const genesisUnix = mtp.mtp;
+  // Baked-in WLotus genesis start time (1788215242, Aug 31, 2026), or env override
+  const genesisUnix = Number(
+    process.env.PAW_GENESIS_UNIX?.trim() || WLOTUS_GENESIS_UNIX,
+  );
+  // Tip locktime starts at genesisUnix or optionally at current MTP if forward-only
+  const tipLocktime = Number(
+    process.env.PAW_INITIAL_TIP_LOCKTIME?.trim() || genesisUnix,
+  );
 
   console.log(`Broadcasting ALP Genesis for ${PAW_TICKER}...`);
   const genesisResult = await broadcastAlpGenesis(wallet, {
@@ -70,13 +83,17 @@ async function main() {
   const secondsPerExtraBit = resolveFeltSecondsPerExtraBit();
   const baseZeroBits = POW_PAW_BASE_ZERO_BITS;
 
+  console.log(
+    `Baking covenant with WLotus parameters: genesisUnix=${genesisUnix}, baseZeroBits=${baseZeroBits}, mintAtoms=${PAW_MINT_ATOMS}, secondsPerExtraBit=${secondsPerExtraBit}, tipLocktime=${tipLocktime}`,
+  );
+
   const contract = await createPowRemintGlotusTipContract({
     tokenId,
     mintAtoms: PAW_MINT_ATOMS,
     genesisUnix,
     baseZeroBits,
     secondsPerExtraBit,
-    tipLocktime: genesisUnix,
+    tipLocktime,
   });
 
   console.log(`Covenant P2SH address: ${contract.address}`);
@@ -96,6 +113,9 @@ async function main() {
     powScriptHashHex: toHex(contract.scriptHash),
     redeemHex: contract.redeemHex,
     batonCount: POW_BATON_COUNT,
+    wlotusAligned: true,
+    wlotusGenesisUnix: WLOTUS_GENESIS_UNIX,
+    mintAtoms: PAW_MINT_ATOMS.toString(),
     createdAt: new Date().toISOString(),
   };
 

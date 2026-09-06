@@ -3,6 +3,14 @@
  *
  * Token: PAW (name "Onest", URL "https://onest.pet")
  * App: animal profile / paw-print tribute
+ *
+ * Issuance and difficulty aligned 1:1 with live production WLotus:
+ * - WLotus Token ID: a41bf9d03961a2be83f854c8cea0b3fddf7e275ff3695d9848046052d6db3df9
+ * - WLotus Genesis Unix: 1788215242 (2026-08-31T22:27:22.000Z)
+ * - Mint atoms: 108 (matching WLotus 108 atoms per remint)
+ * - Base zero bits: 0 (starting baseline difficulty)
+ * - Seconds per extra bit: 43200000 (500 days per bit)
+ * - Batons: 28 (maximum ALP standard genesis batons)
  */
 
 export const PAW_TICKER = 'PAW';
@@ -16,11 +24,18 @@ export const TOKEN_URL = PAW_URL;
 export const TOKEN_DECIMALS = 0;
 export const POW_LEADING_ZERO_BYTES = 1;
 
-/** Default PoW difficulty bits for phone / client mine (~15-30s) */
-export const POW_PAW_BASE_ZERO_BITS = 22;
+/**
+ * WLotus live production genesis timestamp baked into the PAW covenant.
+ * August 31, 2026, 22:27:22 UTC (1788215242).
+ */
+export const WLOTUS_GENESIS_UNIX = 1788215242;
+export const PAW_GENESIS_UNIX = WLOTUS_GENESIS_UNIX;
 
-export const BASE_MINT_ATOMS = 100n;
-export const PAW_MINT_ATOMS = 100n;
+/** Base zero bits for the Moore difficulty clock (0, matching WLotus) */
+export const POW_PAW_BASE_ZERO_BITS = 0;
+
+export const BASE_MINT_ATOMS = 108n;
+export const PAW_MINT_ATOMS = 108n;
 
 /**
  * ALP mempool policy caps token outputs per tx at 29 (`ALP_POLICY_MAX_OUTPUTS`).
@@ -36,7 +51,7 @@ export const MOORE_DEN = 100000n;
 export const MOORE_DAY_BLOCKS = 144;
 export const MOORE_DAY_SECONDS = 86_400;
 
-/** Default days per extra bit on the Moore clock */
+/** Default days per extra bit on the Moore clock (500 days, matching WLotus) */
 export const MOORE_DAYS_PER_EXTRA_BIT = 500;
 
 export function resolveMooreDaysPerExtraBit(raw?: string): number {
