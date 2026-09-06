@@ -111,9 +111,7 @@ jobs:
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
             sudo chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true; \
             sudo systemctl try-restart onest-dana-index 2>/dev/null || systemctl try-restart onest-dana-index 2>/dev/null || true; \
-            sudo systemctl try-restart onest-mint-api 2>/dev/null || systemctl try-restart onest-mint-api 2>/dev/null || true; \
-            sudo systemctl try-restart wlotus-dana-index 2>/dev/null || systemctl try-restart wlotus-dana-index 2>/dev/null || true; \
-            sudo systemctl try-restart wlotus-mint-api 2>/dev/null || systemctl try-restart wlotus-mint-api 2>/dev/null || true"
+            sudo systemctl try-restart onest-mint-api 2>/dev/null || systemctl try-restart onest-mint-api 2>/dev/null || true"
 
           # Clean up private key from runner
           rm -f ~/.ssh/deploy_key
