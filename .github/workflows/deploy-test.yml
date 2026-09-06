@@ -1,0 +1,138 @@
+name: Deploy to Test
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Build packages and web app
+        env:
+          VITE_PUBLIC_SITE_ORIGIN: ${{ vars.VITE_PUBLIC_SITE_ORIGIN || 'https://test.onest.pet' }}
+          VITE_PAW_TOKEN_ID: ${{ vars.VITE_PAW_TOKEN_ID || secrets.VITE_PAW_TOKEN_ID || '' }}
+          VITE_PAW_TICKER: ${{ vars.VITE_PAW_TICKER || 'PAW' }}
+        run: |
+          npm run build
+          npm run web:build
+
+      - name: Check required deployment secrets
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
+          SSH_PASS: ${{ secrets.TEST_SSH_PASS || secrets.CONTABO_SSH_PASS || secrets.SSH_PASSWORD }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SSH_HOST" ]; then
+            echo "::error::Missing TEST_SSH_HOST (or CONTABO_HOST) secret."
+            exit 1
+          fi
+          if [ -z "$SSH_PASS" ] && [ -z "$SSH_KEY" ]; then
+            echo "::error::Neither SSH password (TEST_SSH_PASS) nor private key (TEST_SSH_KEY / CONTABO_SSH_PRIVATE_KEY) was found in repository secrets."
+            exit 1
+          fi
+          echo "Deployment target: ${SSH_USER}@${SSH_HOST}"
+
+      - name: Deploy to Test VM
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'root' }}
+          SSH_PORT: ${{ secrets.TEST_SSH_PORT || secrets.CONTABO_SSH_PORT || '22' }}
+          SSH_PASS: ${{ secrets.TEST_SSH_PASS || secrets.CONTABO_SSH_PASS || secrets.SSH_PASSWORD }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+          WEB_DEST: ${{ vars.TEST_WEB_PATH || secrets.TEST_WEB_PATH || '/var/www/onest-test' }}
+          REPO_DEST: ${{ vars.TEST_REPO_PATH || secrets.TEST_REPO_PATH || '/opt/onest' }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          if [ -n "$SSH_KEY" ]; then
+            echo "Configuring SSH private key authentication..."
+            printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=no"
+            RSYNC_SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=no"
+            DO_RSYNC="rsync"
+          else
+            echo "Installing sshpass for password authentication..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass rsync
+            export SSHPASS="$SSH_PASS"
+            SSH_CMD="sshpass -e ssh -p ${SSH_PORT} -o StrictHostKeyChecking=no"
+            RSYNC_SSH="ssh -p ${SSH_PORT} -o StrictHostKeyChecking=no"
+            DO_RSYNC="sshpass -e rsync"
+          fi
+
+          echo "Ensuring remote web directory exists..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p '${WEB_DEST}' '${REPO_DEST}'"
+
+          echo "Deploying web app assets to ${WEB_DEST}..."
+          $DO_RSYNC -avz --delete \
+            -e "${RSYNC_SSH}" \
+            apps/web/dist/ \
+            "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
+
+          echo "Setting web directory permissions..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chown -R www-data:www-data '${WEB_DEST}' || true"
+
+          echo "Syncing repository code to ${REPO_DEST}..."
+          $DO_RSYNC -avz \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude 'data' \
+            --exclude 'dist' \
+            --exclude 'apps/web/dist' \
+            -e "${RSYNC_SSH}" \
+            ./ \
+            "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
+
+          echo "Updating backend code permissions and restarting services if present..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            if id deploy >/dev/null 2>&1; then chown -R deploy:deploy '${REPO_DEST}'; fi; \
+            if systemctl is-active --quiet onest-dana-index 2>/dev/null; then systemctl restart onest-dana-index; fi; \
+            if systemctl is-active --quiet onest-mint-api 2>/dev/null; then systemctl restart onest-mint-api; fi; \
+            if systemctl is-active --quiet wlotus-dana-index 2>/dev/null; then systemctl restart wlotus-dana-index; fi; \
+            if systemctl is-active --quiet wlotus-mint-api 2>/dev/null; then systemctl restart wlotus-mint-api; fi"
+
+          echo "Deployment complete."
+
+      - name: Verify Live Deployment (Smoke Check)
+        env:
+          SMOKE_URL: ${{ vars.TEST_SMOKE_URL || secrets.TEST_SMOKE_URL || 'https://test.onest.pet' }}
+        run: |
+          echo "Running smoke check against ${SMOKE_URL}..."
+          for i in {1..6}; do
+            if curl -fsSL --retry 3 --retry-delay 2 "${SMOKE_URL}" | grep -q "Loving Animal Memories"; then
+              echo "Smoke check passed: ${SMOKE_URL} is live and serving 'Loving Animal Memories'."
+              exit 0
+            fi
+            echo "Waiting for live update... ($i/6)"
+            sleep 5
+          done
+          echo "::error::Smoke check failed: Expected title 'Loving Animal Memories' not found at ${SMOKE_URL}"
+          exit 1
