@@ -1,10 +1,13 @@
 import {
   PAW_MINT_ATOMS,
   PAW_MINER_ATOMS,
+  PAW_COVENANT,
+  PAW_WLOTUS_COVENANT,
   PAW_FELT_COVENANT,
   PAW_GLOTUS_COVENANT,
   WLOTUS_GENESIS_UNIX,
   POW_PAW_BASE_ZERO_BITS,
+  isPawWLotusCovenant,
   isPawFeltCovenant,
   isPawGlotusCovenant,
   resolvePawGenesisRegime,
@@ -19,7 +22,7 @@ import {
 } from '../src/params/consensus.js';
 import { computeMooreTipState } from '../src/covenant/mooreTip.js';
 
-describe('pawMint & consensus (GLotus model aligned 1:1 with WLotus)', () => {
+describe('pawMint & consensus (WLotusCovenant model aligned 1:1 with WLotus)', () => {
   it('has matching 108 atoms for both mint and miner with no temple tax', () => {
     expect(PAW_MINT_ATOMS).toBe(108n);
     expect(PAW_MINER_ATOMS).toBe(108n);
@@ -64,15 +67,18 @@ describe('pawMint & consensus (GLotus model aligned 1:1 with WLotus)', () => {
     expect(PAW_URL).toBe('https://onest.pet');
   });
 
-  it('identifies GLotus covenant correctly', () => {
+  it('identifies WLotusCovenant covenant correctly', () => {
+    expect(PAW_COVENANT).toBe('WLotusCovenant');
+    expect(PAW_WLOTUS_COVENANT).toBe('WLotusCovenant');
+    expect(isPawWLotusCovenant({ covenant: PAW_WLOTUS_COVENANT })).toBe(true);
     expect(isPawFeltCovenant({ covenant: PAW_FELT_COVENANT })).toBe(true);
     expect(isPawGlotusCovenant({ covenant: PAW_GLOTUS_COVENANT })).toBe(true);
-    expect(isPawFeltCovenant({ covenant: 'WlotusPowRemintMooreTip' })).toBe(false);
-    expect(isPawFeltCovenant({ covenant: 'Unknown' })).toBe(false);
+    expect(isPawWLotusCovenant({ covenant: 'WlotusPowRemintMooreTip' })).toBe(false);
+    expect(isPawWLotusCovenant({ covenant: 'Unknown' })).toBe(false);
   });
 
-  it('resolves regime to GLotus felt', () => {
-    expect(resolvePawGenesisRegime({ REGIME: 'felt' })).toBe('glotus');
-    expect(resolvePawGenesisRegime({})).toBe('glotus');
+  it('resolves regime to WLotusCovenant', () => {
+    expect(resolvePawGenesisRegime({ REGIME: 'wlotus' })).toBe('wlotus');
+    expect(resolvePawGenesisRegime({})).toBe('wlotus');
   });
 });

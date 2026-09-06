@@ -11,8 +11,14 @@ import { fromHex, toHex, Script } from 'ecash-lib';
 import type { Wallet } from 'ecash-wallet';
 import { createChronik } from '../../../src/network/createChronik.js';
 import { getMedianTimePast } from '../../../src/network/medianTimePast.js';
-import { createPowRemintGlotusTipContract } from '../../../src/covenant/powRemintGlotusTipScript.js';
-import { expectedGlotusMintOpReturnScript } from '../../../src/covenant/powRemintGlotusTipOutputs.js';
+import {
+  createPowRemintWLotusCovenantContract,
+  createPowRemintGlotusTipContract,
+} from '../../../src/covenant/powRemintWLotusCovenantScript.js';
+import {
+  expectedWLotusCovenantMintOpReturnScript,
+  expectedGlotusMintOpReturnScript,
+} from '../../../src/covenant/powRemintWLotusCovenantOutputs.js';
 import {
   buildMooreTipRemintChallenge,
   buildMooreTipRemintTxWithNonce,
@@ -249,7 +255,7 @@ function loadDepJson(): OnestDep {
     tokenId: envToken,
     ticker: 'PAW',
     name: 'Onest',
-    covenant: 'GlotusPowRemintMooreTip',
+    covenant: 'WLotusCovenant',
     mode: 'onest-moore-felt-bit',
     baseZeroBits: POW_PAW_BASE_ZERO_BITS,
     genesisUnix: WLOTUS_GENESIS_UNIX,
@@ -325,28 +331,42 @@ export async function enqueueChallenge(opts: {
   const mtp = await getMedianTimePast(chronik);
   const locktime = Math.max(baton.creatingLockTime, mtp.mtp);
 
-  const contract = await createPowRemintGlotusTipContract({
-    tokenId: dep.tokenId,
-    mintAtoms: PAW_MINT_ATOMS,
-    genesisUnix: dep.genesisUnix ?? WLOTUS_GENESIS_UNIX,
-    baseZeroBits: dep.baseZeroBits ?? POW_PAW_BASE_ZERO_BITS,
-    secondsPerExtraBit: dep.secondsPerExtraBit || (500 * 86_400),
-    tipLocktime: baton.creatingLockTime,
-  });
+  const contract = await matchCovenantToBaton(
+    baton,
+    [dep.genesisUnix ?? WLOTUS_GENESIS_UNIX],
+    async (tipLocktime) => {
+      const c = await createPowRemintWLotusCovenantContract({
+        tokenId: dep.tokenId,
+        mintAtoms: PAW_MINT_ATOMS,
+        genesisUnix: dep.genesisUnix ?? WLOTUS_GENESIS_UNIX,
+        baseZeroBits: dep.baseZeroBits ?? POW_PAW_BASE_ZERO_BITS,
+        secondsPerExtraBit: dep.secondsPerExtraBit || (500 * 86_400),
+        tipLocktime,
+      });
+      return {
+        ...c,
+        p2shScriptHex: toHex(c.p2shScript.bytecode),
+        tipLocktime,
+      };
+    },
+  );
 
-  // Ensure fuel coin exists on tip wallet
+  // Ensure fuel coin and postage exist on tip wallet
   let fuelUtxo = pickSizedFuelUtxo(tipWallet.wallet.utxos);
-  if (!fuelUtxo) {
+  let postageUtxo = pickBurnPostageUtxo(tipWallet.wallet.utxos);
+  if (!fuelUtxo || !postageUtxo) {
     const mintDesk = await loadMintWallet(chronik);
     await sendOfferingPairFromDesk(mintDesk.wallet, tipWallet.wallet);
+    await tipWallet.wallet.sync();
     fuelUtxo = pickSizedFuelUtxo(tipWallet.wallet.utxos);
+    postageUtxo = pickBurnPostageUtxo(tipWallet.wallet.utxos);
   }
 
   if (!fuelUtxo) {
     throw new Error('Could not prepare remint fuel UTXO');
   }
 
-  const prep = {
+  const prep = await buildMooreTipRemintChallenge({
     contract,
     baton: {
       outpoint: { txid: baton.txid, outIdx: baton.outIdx },
@@ -361,7 +381,8 @@ export async function enqueueChallenge(opts: {
     },
     miner: { sk: tipWallet.sk, pk: tipWallet.pk },
     locktime,
-  };
+    opReturn: expectedWLotusCovenantMintOpReturnScript(dep.tokenId, PAW_MINT_ATOMS),
+  });
 
   const challengeId = randomUUID();
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
@@ -379,7 +400,7 @@ export async function enqueueChallenge(opts: {
     tipKey: `${baton.txid}:${baton.outIdx}`,
     tipIndex: tipIdx,
     locktime,
-    prepared: prep as any,
+    prepared: prep,
     note,
     parentBurnTxid: opts.parentBurnTxid,
   };
@@ -391,13 +412,13 @@ export async function enqueueChallenge(opts: {
     challengeId,
     expiresAt: new Date(expiresAt).toISOString(),
     tokenId: dep.tokenId,
-    bits: tipState.bits,
+    bits: prep.tip.bits,
     commit: MOORE_TIP_POW_COMMIT,
     nonceLength: 4,
-    preimageHex: '',
-    powPrefixHex: '',
+    preimageHex: prep.preimageHex,
+    powPrefixHex: prep.powPrefixHex,
     locktime,
-    tipLocktime: baton.creatingLockTime,
+    tipLocktime: contract.params.tipLocktime,
     tipKey: active.tipKey,
     tipEpoch: baton.txid,
     tipIndex: tipIdx,
@@ -423,8 +444,31 @@ export async function enqueueSubmit(opts: {
   ch.status = 'submitted';
   challenges.delete(opts.challengeId);
 
+  const nonce = parseNonceHex(opts.nonceHex);
+  const built = await buildMooreTipRemintTxWithNonce({
+    prepared: ch.prepared,
+    nonce,
+  });
+
+  const chronik = await createChronik();
+  let remintTxid: string;
+  try {
+    const broadcast = await chronik.broadcastTx(built.txHex);
+    remintTxid =
+      typeof broadcast === 'string'
+        ? broadcast
+        : (broadcast as { txid: string }).txid;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ch.status = 'expired';
+    throw new Error(
+      /missing|spent|conflict|txn-mempool|already|orphan|inputs-missing/i.test(msg)
+        ? 'TIP_RACE_LOST'
+        : msg,
+    );
+  }
+
   const burnToken = randomBytes(32).toString('hex');
-  const remintTxid = '0'.repeat(64); // Stand-in for remint execution on live tip
 
   pendingBurns.set(remintTxid, {
     installId: opts.installId,
@@ -438,6 +482,10 @@ export async function enqueueSubmit(opts: {
     expiresAt: Date.now() + PENDING_BURN_TTL_MS,
   });
 
+  const powMs = opts.powMs != null && opts.powMs > 0 ? Math.round(opts.powMs) : 0;
+  const powAttempts = opts.powAttempts != null && opts.powAttempts > 0 ? Math.round(opts.powAttempts) : 0;
+  const hashrateHps = powMs > 0 && powAttempts > 0 ? Math.round(powAttempts / (powMs / 1000)) : 0;
+
   return {
     remintTxid,
     burnTxid: '',
@@ -445,9 +493,9 @@ export async function enqueueSubmit(opts: {
     burnToken,
     tokenId: ch.tokenId,
     bits: ch.prepared?.tip?.bits ?? 0,
-    powAttempts: opts.powAttempts || 1000,
-    powMs: opts.powMs || 500,
-    hashrateHps: 2000,
+    powAttempts,
+    powMs,
+    hashrateHps,
     deskAtomsKept: Number(PAW_MINER_ATOMS) - 1,
     note: ch.note,
     explorerRemint: explorerTx(remintTxid),

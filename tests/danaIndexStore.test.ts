@@ -70,6 +70,11 @@ describe('BurnStore', () => {
     expect(group?.totalBurns).toBe(2);
     expect(group?.latestBurnTxid).toBe(tributeTxid);
 
+    // Can also query group by child tribute txid
+    const groupByChild = store.groupForRoot(tributeTxid);
+    expect(groupByChild).toBeDefined();
+    expect(groupByChild?.originalBurnTxid).toBe(rootTxid);
+
     const searchRes = store.search('Rusty');
     expect(searchRes.length).toBe(1);
     expect(searchRes[0]!.originalBurnTxid).toBe(rootTxid);

@@ -6,6 +6,8 @@ export * from './offering/danaMemorial.js';
 export * from './offering/burnPaw.js';
 export * from './offering/pawAtoms.js';
 export * from './explorer.js';
+export * from './covenant/powRemintWLotusCovenantScript.js';
+export * from './covenant/powRemintWLotusCovenantOutputs.js';
 export * from './covenant/powRemintGlotusTipScript.js';
 export * from './covenant/powRemintGlotusTipOutputs.js';
 export {
@@ -23,4 +25,3 @@ export {
   wlptV4Pushdata,
 } from './covenant/mooreTip.js';
 export * from './covenant/minePow.js';
-

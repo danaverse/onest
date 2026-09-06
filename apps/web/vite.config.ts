@@ -80,7 +80,19 @@ export default defineConfig({
       '/index-api': {
         target: 'http://localhost:8788',
         changeOrigin: true,
-        rewrite: path => path.replace(/^\/index-api/, ''),
+      },
+    },
+  },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+      '/index-api': {
+        target: 'http://localhost:8788',
+        changeOrigin: true,
       },
     },
   },
