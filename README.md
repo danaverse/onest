@@ -66,3 +66,22 @@ Run web frontend:
 ```bash
 npm run web
 ```
+
+## Continuous Deployment (GitHub Actions)
+
+When a pull request is merged into the `main` branch, the `.github/workflows/deploy-test.yml` workflow automatically runs the test suite, linter, builds the web app, and deploys to the test VM (`test.onest.pet`).
+
+### Required GitHub Secrets
+
+Configure the following secrets in GitHub (**Settings → Secrets and variables → Actions → Secrets**):
+
+- `TEST_SSH_HOST`: IP or domain of the test VM (`154.53.59.31`)
+- `TEST_SSH_KEY`: The SSH private key generated for deployment (`ed25519` PEM format)
+
+#### Optional Variables / Secrets:
+- `TEST_SSH_USER`: SSH user (default `deploy`, following least-privilege security best practices)
+- `TEST_SSH_PORT`: SSH port (default `22`)
+- `TEST_WEB_PATH`: Web root on VM (default `/var/www/onest-test`)
+- `TEST_REPO_PATH`: Codebase destination on VM (default `/opt/onest`)
+- `TEST_SMOKE_URL`: Live verification URL (default `https://test.onest.pet`)
+
