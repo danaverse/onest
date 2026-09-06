@@ -87,7 +87,7 @@ export function ogCopy(
       };
     default:
       return {
-        title: 'Onest — Loving Pet Memorials',
+        title: 'Onest — Loving Animal Memory',
         description: 'Paw-print animal profile tributes recorded forever on eCash.',
       };
   }
