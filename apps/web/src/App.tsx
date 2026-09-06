@@ -128,7 +128,7 @@ export default function App() {
         {loading && (
           <div className="feed-loading">
             <span className="paw-spinner">🐾</span>
-            <p>Loading animal memorials...</p>
+            <p>Loading animal memories...</p>
           </div>
         )}
 
@@ -137,8 +137,8 @@ export default function App() {
             <div className="welcome-icon">🐾</div>
             <h2>Welcome to Onest</h2>
             <p className="welcome-text">
-              Preserve the eternal memory of your beloved animal companions on the eCash blockchain.
-              Create an on-chain animal memorial profile and dedicate paw-print tributes powered by proof-of-work minting.
+              Preserve the eternal memory of your beloved animal companions.
+              Create an animal memory profile and dedicate loving paw-print tributes.
             </p>
             <button
               type="button"

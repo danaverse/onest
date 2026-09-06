@@ -48,7 +48,7 @@ export function MemorialDetailModal(props: {
           setMemorial(m);
         })
         .catch(e => {
-          setErr(e?.message || 'Could not load memorial');
+          setErr(e?.message || 'Could not load memory details');
         })
         .finally(() => {
           setLoading(false);
@@ -99,7 +99,7 @@ export function MemorialDetailModal(props: {
           </button>
         </div>
 
-        {loading && <div className="loading-state">Loading memorial details...</div>}
+        {loading && <div className="loading-state">Loading memory details...</div>}
         {err && <div className="error-box">{err}</div>}
 
         {memorial && (

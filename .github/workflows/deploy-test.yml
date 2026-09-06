@@ -94,7 +94,7 @@ jobs:
             "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
 
           echo "Setting web directory permissions..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "sudo chown -R www-data:www-data '${WEB_DEST}' 2>/dev/null || chown -R www-data:www-data '${WEB_DEST}' 2>/dev/null || true"
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chmod -R u+rwX,g+rX '${WEB_DEST}' 2>/dev/null || true"
 
           echo "Syncing repository code to ${REPO_DEST}..."
           rsync -avz \

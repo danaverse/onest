@@ -30,7 +30,7 @@ export function ogImageAlt(locale: OgLocale): string {
     case 'zh':
       return 'Onest — 宠物纪念印记';
     default:
-      return 'Onest — paw-print animal memorial';
+      return 'Onest — paw-print animal memories';
   }
 }
 
@@ -60,17 +60,17 @@ export function ogCopy(
       case 'vi':
         return {
           title: `Tưởng nhớ ${n}`,
-          description: 'Dấu chân tưởng nhớ thú cưng yêu quý — ghi mãi trên chuỗi eCash.',
+          description: 'Dấu chân tưởng nhớ thú cưng yêu quý — ghi dấu vĩnh cửu.',
         };
       case 'zh':
         return {
           title: `纪念 ${n}`,
-          description: '献给挚爱宠物的爪印纪念——永远镌刻于 eCash 链上。',
+          description: '献给挚爱宠物的爪印印记——永远留存。',
         };
       default:
         return {
           title: `In memory of ${n}`,
-          description: 'A loving paw-print tribute — recorded forever on eCash.',
+          description: 'A loving paw-print tribute — recorded forever.',
         };
     }
   }
@@ -78,17 +78,17 @@ export function ogCopy(
     case 'vi':
       return {
         title: 'Onest — Kết nối yêu thương',
-        description: 'Tưởng nhớ thú cưng và lưu giữ dấu chân vĩnh cửu trên eCash.',
+        description: 'Lưu giữ ký ức thú cưng và dấu chân vĩnh cửu.',
       };
     case 'zh':
       return {
         title: 'Onest — 跨越彩虹桥的永恒思念',
-        description: '为挚爱宠物点亮永恒的爪印纪念。',
+        description: '为挚爱宠物点亮永恒的爪印记忆。',
       };
     default:
       return {
         title: 'Onest — Loving Animal Memories',
-        description: 'Paw-print animal profile tributes recorded forever on eCash.',
+        description: 'Paw-print animal profile tributes recorded forever.',
       };
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "onest",
   "version": "0.1.0",
-  "description": "Onest: Animal profile memorial + paw-print tributes with ALP PoW remint on eCash",
+  "description": "Onest: Animal memories and paw-print tributes with ALP PoW remint",
   "private": true,
   "type": "module",
   "workspaces": [
