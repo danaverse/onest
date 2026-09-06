@@ -25,7 +25,7 @@ describe('ogPreview', () => {
   });
 
   it('provides default copy when name is empty', () => {
-    expect(ogCopy('en', '').title).toBe('Onest — Loving Animal Memory');
+    expect(ogCopy('en', '').title).toBe('Onest — Loving Animal Memories');
     expect(ogCopy('vi', '').title).toBe('Onest — Kết nối yêu thương');
     expect(ogCopy('zh', '').title).toBe('Onest — 跨越彩虹桥的永恒思念');
   });
