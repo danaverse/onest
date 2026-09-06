@@ -387,6 +387,7 @@ export async function enqueueChallenge(opts: {
   const challengeId = randomUUID();
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
   const note = opts.note ? prepareDanaNote(opts.note, Boolean(opts.parentBurnTxid)) : '';
+  const tipState = computeMooreTipState(locktime, contract.params);
 
   const active: ActiveChallenge = {
     id: challengeId,
