@@ -28,7 +28,7 @@ export function ogImageAlt(locale: OgLocale): string {
     case 'vi':
       return 'Onest — dấu chân tưởng nhớ';
     case 'zh':
-      return 'Onest — 宠物纪念印记';
+      return 'Onest — 每一枚爪印，都是爱的故事';
     default:
       return 'Onest — paw-print animal memories';
   }
@@ -64,8 +64,8 @@ export function ogCopy(
         };
       case 'zh':
         return {
-          title: `纪念 ${n}`,
-          description: '献给挚爱宠物的爪印印记——永远留存。',
+          title: `怀念 ${n}`,
+          description: '每一枚爪印，都是爱的故事。',
         };
       default:
         return {
@@ -77,18 +77,18 @@ export function ogCopy(
   switch (locale) {
     case 'vi':
       return {
-        title: 'Onest — Kết nối yêu thương',
-        description: 'Lưu giữ ký ức thú cưng và dấu chân vĩnh cửu.',
+        title: 'Onest — Theo dấu chân thương',
+        description: 'Lưu giữ ký ức thú cưng và in dấu chân vĩnh cửu.',
       };
     case 'zh':
       return {
-        title: 'Onest — 跨越彩虹桥的永恒思念',
-        description: '为挚爱宠物点亮永恒的爪印记忆。',
+        title: 'Onest — 每一枚爪印，都是爱的故事',
+        description: '循着爪印，皆是深爱。',
       };
     default:
       return {
         title: 'Onest — Loving Animal Memories',
-        description: 'Paw-print animal profile tributes recorded forever.',
+        description: 'Every paw print, a story of love.',
       };
   }
 }
