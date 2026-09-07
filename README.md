@@ -21,9 +21,12 @@ Animal memories, paw-print tributes, and ALP PoW minting.
 │   ├── mint-api/     # Sponsored-fee PoW challenge & burn API
 │   └── web/          # Onest PWA frontend (Vite + React)
 ├── contracts/        # Spedn smart contracts for PoW remint covenants
+├── docs/             # Architecture and implementer notes
 ├── src/              # Shared consensus parameters, covenants, and helpers
 └── scripts/          # Genesis & token operation scripts
 ```
+
+Social-network direction (off-chain posts, on-chain hashes, weighted N PAW votes, stamp tiers, data layer): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tokenomics & Covenant Alignment
 
