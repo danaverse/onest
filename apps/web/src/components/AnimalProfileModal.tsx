@@ -239,6 +239,8 @@ export function AnimalProfileModal(props: {
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
 
+            {!busy && <p className="pow-hint">{t('powHint')}</p>}
+
             <div className="modal-actions">
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">
                 Cancel
@@ -248,7 +250,7 @@ export function AnimalProfileModal(props: {
                 disabled={busy || (props.parentBurnTxid ? !note.trim() : !name.trim())}
                 className="btn-primary"
               >
-                {busy ? 'Processing...' : t('submitTribute')}
+                {busy ? t('miningTribute') : t('submitTribute')}
               </button>
             </div>
           </form>
