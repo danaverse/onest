@@ -26,7 +26,7 @@ Animal memories, paw-print tributes, and ALP PoW minting.
 └── scripts/          # Genesis & token operation scripts
 ```
 
-Social-network direction (off-chain posts, on-chain hashes, 1 PAW votes, stamp tiers, data layer): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Social-network direction (off-chain posts, on-chain hashes, weighted N PAW votes, stamp tiers, data layer): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Tokenomics & Covenant Alignment
 

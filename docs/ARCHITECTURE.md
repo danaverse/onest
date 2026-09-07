@@ -10,12 +10,12 @@ Related: [README](../README.md) · [dana-index](../apps/dana-index/README.md) ·
 
 | Layer | Role | Source of truth |
 |-------|------|-----------------|
-| **Chain** | Stamps, 1 PAW burns, vote burns, post-content hashes | Chronik / ALP + DANA (or ONEST) `OP_RETURN` |
+| **Chain** | Stamps, paw burns, **weighted** vote burns (N PAW), post-content hashes | Chronik / ALP + DANA (or ONEST) `OP_RETURN` |
 | **Hosted index** | Feed, captions, comments, vote tallies, search | SQLite (new). Burns stay on the JSON cache until it hurts |
 | **Object storage** | Photos and video bytes | Cloudflare R2 (or S3-compatible) + optional Cloudflare Images |
 | **PWA** | Profiles, stamp a paw, later Instagram-like feed | `apps/web` (Vite + React) |
 
-Posts are **off-chain**. The **hash** is **on-chain**. Onest hosts messages and media. Votes cost **1 PAW** each (up or down), same idea as Lixi burns, without importing Lixi’s Nest / Prisma / Redis stack.
+Posts are **off-chain**. The **hash** is **on-chain**. Onest hosts messages and media. Votes are **weighted PAW burns**: any integer **N ≥ 1** atoms, up or down (Lixi’s variable burn, not a single-token click). Do not import Lixi’s Nest / Prisma / Redis stack.
 
 ---
 
@@ -97,8 +97,8 @@ posts
   content_hash    text unique
   anchor_txid     text unique      -- null until confirmed
   created_at      integer
-  upvote_atoms    integer default 0
-  downvote_atoms  integer default 0
+  upvote_atoms    integer default 0   -- SUM of up-burn atoms
+  downvote_atoms  integer default 0   -- SUM of down-burn atoms
 
 media
   sha256          text pk
@@ -110,36 +110,50 @@ media
   duration_ms     integer          -- video
 
 votes                              -- from Chronik, not a trusted POST /vote
-  txid            text pk
+  txid            text pk          -- one row per burn tx
   post_id         text → posts
   direction       integer          -- 1 up / 0 down
-  atoms           integer          -- 1 PAW
+  atoms           integer          -- N PAW burned in this tx (N ≥ 1)
   burned_by       text
   block_height    integer
-  unique (burned_by, post_id)
+  -- no unique (burned_by, post_id): later burns add weight
 
 comments                           -- phase 2
   id, post_id, author, body, created_at, anchor_txid?
 ```
 
-Feed score: `upvote_atoms - downvote_atoms`, plus existing gravity in `src/lib/trendingScore.ts`. Materialize a `score` column only when listing gets slow.
+Feed score: `upvote_atoms - downvote_atoms` (atom-weighted), plus existing gravity in `src/lib/trendingScore.ts`. Materialize a `score` column only when listing gets slow.
 
 ---
 
-## Votes (1 PAW, Lixi-style burn)
+## Votes (N PAW, weighted Lixi-style burn)
 
-Lixi burns XPI with `BurnType.Up = 1`, `BurnType.Down = 0`, `BurnForType.Post = 0x5f02`. Onest does the same job with **PAW**:
+Lixi lets the voter pick a burn size (`1, 8, 50, 100, …` XPI) with `BurnType.Up = 1`, `BurnType.Down = 0`, `BurnForType.Post = 0x5f02`. Onest does the same with **PAW atoms**, not a single-token click.
 
 ```
 OP_RETURN  DANA|ONES  BURN  direction  targetType  postHash  voter
                          1=up / 0=down   0x5f02
+
+ALP burn output: N PAW atoms   ← this is the vote weight
 ```
 
-- Cost: **1 PAW** per vote (burn, not transfer).
-- `dana-index` ingests the burn, matches `postHash`, updates tallies.
-- Do not increment likes from an unauthenticated API body. The client may *notify*; Chronik is the count.
+- **Weight = atoms burned in that tx.** Minimum **1**. No protocol maximum; UX can offer presets (e.g. 1, 8, 54, 108) plus a custom amount, and optionally cap a single tx (e.g. one mala = 108) so a mis-tap cannot empty a wallet.
+- Direction lives in `OP_RETURN`. Amount lives in the ALP burn, not in a hosted “likes++” field.
+- Same voter may burn again on the same post. Later txs **add** atoms (another +8 up, or a down that offsets). Do **not** use `unique (burned_by, post_id)`.
+- Net for a post: `score = sum(up atoms) - sum(down atoms)`. Optional later: show that voter’s own net (`their up − their down`).
+- `dana-index` ingests each vote tx, reads `N` from token entries, matches `postHash`, increments the matching tally by **N**.
+- Do not increment score from an unauthenticated API body. The client may *notify*; Chronik is the count.
 
-Reuse `trendingScore.ts` (HN-style gravity 1.5) so memories and posts share one ranking idea.
+**Who pays the PAW**
+
+| Path | PAW source | Typical N |
+|------|------------|-----------|
+| User wallet | PAW the user already holds | Any N they sign |
+| Sponsored desk | Desk inventory after remint | **Default 1.** Larger N on the sponsored path drains the desk — require user-held PAW (or user XEC + remint they keep) for N > 1 |
+
+Sponsored *network fees* and sponsored *token inventory* are different. A casual stamp can still burn 1 PAW from the desk. Weighted votes should spend **the voter’s PAW**, or the desk will be farmed for score.
+
+Reuse `trendingScore.ts` (HN-style gravity 1.5) so memories and posts share one ranking idea. Gravity still applies to *when* atoms arrived; weight is the atom count, not the number of click events.
 
 ---
 
@@ -221,7 +235,7 @@ Keep a store class API (`BurnStore` / `SocialStore`) so `server.ts` does not gro
 - GraphQL loaders and account/page/token graphs
 - Prisma + Postgres + Redis as the *starting* stack
 
-Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, 1-token up/down burns.
+Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burns.
 
 ---
 
@@ -258,7 +272,7 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 3. **Upload** — presigned R2 (local disk acceptable on the test VM); hash-keyed objects.
 4. **Post stamp** — `OP_RETURN` content hash; indexer verifies before “verified.”
 5. **Feed UI** — card layout on the PWA (caption, images, later video).
-6. **Votes** — 1 PAW burn up/down; Chronik ingest; unique `(burned_by, post_id)`.
+6. **Votes** — N PAW burn up/down (weight = atoms); Chronik ingest; unique on `txid` only; stack burns per voter.
 7. **Stamp tiers** — detect PWA/mobile for UX only; desktop requires user XEC; optional instant-with-XEC on mobile; Turnstile on `/api/challenge`.
 8. **Comments** — hosted first; optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
@@ -270,8 +284,9 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 
 - Lokad id for post stamps: keep `DANA` vs add `ONES`.
 - Soft wait default: 60s vs WLotus 108s (build-time / env, clamp 0–600).
-- One counted vote per identity vs many 1 PAW burns (unique index vs sum of burns).
 - Author identity: `installId` until wallets are common, then address.
 - Video: duration / size cap, and whether beta is images-only.
+- Vote UX presets and optional per-tx atom cap (suggested 108). Stacked burns are decided: **sum atoms, no one-vote-per-identity lock.**
+- Whether a sponsored path may ever burn N > 1 for a vote (default **no**).
 
 When those are decided, update this file rather than scattering notes in PR descriptions.
