@@ -77,8 +77,8 @@ export function ogCopy(
   switch (locale) {
     case 'vi':
       return {
-        title: 'Onest — Kết nối yêu thương',
-        description: 'Lưu giữ ký ức thú cưng và dấu chân vĩnh cửu.',
+        title: 'Onest — Theo dấu chân thương',
+        description: 'Lưu giữ ký ức thú cưng và in dấu chân vĩnh cửu.',
       };
     case 'zh':
       return {
