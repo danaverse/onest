@@ -29,7 +29,7 @@ describe('ogPreview', () => {
 
   it('provides default copy when name is empty', () => {
     expect(ogCopy('en', '').title).toBe('Onest — Loving Animal Memories');
-    expect(ogCopy('en', '').description).toBe('Paw-print animal profile tributes recorded forever.');
+    expect(ogCopy('en', '').description).toBe('Every paw print, a story of love.');
     expect(ogCopy('vi', '').title).toBe('Onest — Theo dấu chân thương');
     expect(ogCopy('vi', '').description).toBe('Lưu giữ ký ức thú cưng và in dấu chân vĩnh cửu.');
     expect(ogCopy('zh', '').title).toBe('Onest — 跨越彩虹桥的永恒思念');

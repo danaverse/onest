@@ -44,7 +44,7 @@ export default defineConfig({
         id: '/',
         name: 'Onest',
         short_name: 'Onest',
-        description: 'Loving animal memories and paw-print tributes',
+        description: 'Every paw print, a story of love.',
         theme_color: '#0a0a0a',
         background_color: '#050505',
         display: 'standalone',

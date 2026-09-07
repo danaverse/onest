@@ -88,7 +88,7 @@ export function ogCopy(
     default:
       return {
         title: 'Onest — Loving Animal Memories',
-        description: 'Paw-print animal profile tributes recorded forever.',
+        description: 'Every paw print, a story of love.',
       };
   }
 }
