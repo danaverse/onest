@@ -13,6 +13,7 @@ export type MessageKey =
   | 'tributeWords'
   | 'submitTribute'
   | 'miningTribute'
+  | 'powHint'
   | 'tributeSuccess'
   | 'recentTributes'
   | 'trendingPets'
@@ -31,8 +32,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     birthDate: 'Birth / Adoption Date',
     passingDate: 'Passing Date (Optional for living)',
     tributeWords: 'Words of Love & Remembrance',
-    submitTribute: 'Stamp a Paw (PoW Mine)',
+    submitTribute: 'Stamp a Paw',
     miningTribute: 'Mining PoW & Stamping Paw...',
+    powHint: 'Your device will do a short proof-of-work (PoW) to stamp this paw.',
     tributeSuccess: 'Paw print stamped with love!',
     recentTributes: 'Recent Paw Prints',
     trendingPets: 'Trending Memories',
@@ -50,8 +52,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     birthDate: 'Ngày sinh / Nhận nuôi',
     passingDate: 'Ngày mất (Để trống nếu còn sống)',
     tributeWords: 'Lời nhắn gửi & Kỷ niệm',
-    submitTribute: 'In dấu chân (Khai thác PoW)',
-    miningTribute: 'Đang khai thác PoW & In dấu chân...',
+    submitTribute: 'In dấu chân',
+    miningTribute: 'Đang khai thác PoW & in dấu chân...',
+    powHint: 'Máy bạn sẽ khai thác PoW trong giây lát để in dấu chân.',
     tributeSuccess: 'Dấu chân thương đã được ghi lại vĩnh cửu!',
     recentTributes: 'Dấu chân gần đây',
     trendingPets: 'Ký ức nổi bật',
@@ -69,8 +72,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     birthDate: '出生 / 领养日期',
     passingDate: '离世日期（健在可留空）',
     tributeWords: '怀念与思念之语',
-    submitTribute: '印下爪印（PoW 算力铸造）',
+    submitTribute: '印下爪印',
     miningTribute: '正在计算 PoW 并印下爪印...',
+    powHint: '设备将进行短暂的算力证明（PoW），然后印下爪印。',
     tributeSuccess: '爪印已印下，爱意长存！',
     recentTributes: '最新爪印记忆',
     trendingPets: '热门宠物记忆',
