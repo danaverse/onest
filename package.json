@@ -25,6 +25,7 @@
     "@spedn/rts-bchjs": "^5.0.0",
     "@spedn/sdk": "^5.0.0",
     "better-sqlite3": "^13.0.3",
+    "bip39": "^3.0.2",
     "chronik-client": "^4.3.0",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.2",

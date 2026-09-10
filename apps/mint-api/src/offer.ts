@@ -286,7 +286,11 @@ export function remainingOffersToday(installId: string): number {
 function resolveDepPath(): string {
   const explicit = process.env.DEPLOYMENT_JSON?.trim();
   if (explicit) return resolve(explicit);
-  return resolve(process.cwd(), 'deployments/mainnet-paw.json');
+  const mainnetPath = resolve(process.cwd(), 'deployments/mainnet-paw.json');
+  if (existsSync(mainnetPath)) return mainnetPath;
+  const testPath = resolve(process.cwd(), 'deployments/test-paw.json');
+  if (existsSync(testPath)) return testPath;
+  return mainnetPath;
 }
 
 function loadDepJson(): OnestDep {
