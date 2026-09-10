@@ -5,15 +5,20 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/server.ts",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "chronik-client": "^4.3.0",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.2",
     "ecash-lib": "^4.13.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.0",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

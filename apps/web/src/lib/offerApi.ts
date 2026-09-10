@@ -1,5 +1,7 @@
 import { MINT_API_BASE, getOrCreateInstallId } from './config.js';
 
+export type BurnKind = 'memorial' | 'post' | 'vote';
+
 export interface ChallengeOk {
   ok: true;
   challengeId: string;
@@ -18,6 +20,12 @@ export interface ChallengeOk {
   mintAtoms: string;
   note: string;
   parentBurnTxid?: string;
+  kind?: BurnKind;
+  contentHash?: string;
+  postHash?: string;
+  direction?: 0 | 1;
+  targetType?: number;
+  minPraySeconds?: number;
 }
 
 export interface OfferOk {
@@ -34,6 +42,10 @@ export interface OfferOk {
   deskAtomsKept: number;
   explorerRemint: string;
   explorerBurn: string;
+  kind?: BurnKind;
+  /** ISO time before which the desk rejects the burn (server-enforced soft wait). */
+  waitUntil?: string;
+  minPraySeconds?: number;
 }
 
 export interface BurnOk {
@@ -44,6 +56,7 @@ export interface BurnOk {
   deskAtomsKept: number;
   explorerRemint: string;
   explorerBurn: string;
+  kind?: BurnKind;
 }
 
 export interface StatusOk {
@@ -54,6 +67,17 @@ export interface StatusOk {
   remainingToday: number | null;
   baseZeroBits?: number | null;
   clientPow?: boolean;
+  minPraySeconds?: number;
+}
+
+/** Thrown by /api/burn while the server-enforced soft wait is pending (HTTP 425). */
+export class BurnWaitError extends Error {
+  readonly retryAfterMs: number;
+  constructor(retryAfterMs: number, message = 'Soft wait not elapsed') {
+    super(message);
+    this.name = 'BurnWaitError';
+    this.retryAfterMs = Math.max(0, Math.ceil(retryAfterMs));
+  }
 }
 
 export async function fetchStatus(): Promise<StatusOk> {
@@ -64,8 +88,13 @@ export async function fetchStatus(): Promise<StatusOk> {
 }
 
 export async function fetchChallenge(opts: {
+  kind?: BurnKind;
   note?: string;
   parentBurnTxid?: string;
+  contentHash?: string;
+  postHash?: string;
+  direction?: 0 | 1;
+  targetType?: number;
 }): Promise<ChallengeOk> {
   const installId = getOrCreateInstallId();
   const res = await fetch(`${MINT_API_BASE}/api/challenge`, {
@@ -73,8 +102,13 @@ export async function fetchChallenge(opts: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       installId,
+      kind: opts.kind,
       note: opts.note,
       parentBurnTxid: opts.parentBurnTxid,
+      contentHash: opts.contentHash,
+      postHash: opts.postHash,
+      direction: opts.direction,
+      targetType: opts.targetType,
     }),
   });
   if (!res.ok) {
@@ -123,6 +157,13 @@ export async function completeOfferBurn(opts: {
       burnToken: opts.burnToken,
     }),
   });
+  if (res.status === 425) {
+    const err = await res.json().catch(() => ({}));
+    throw new BurnWaitError(
+      Number(err.retryAfterMs ?? 1000),
+      err.error || 'Soft wait not elapsed',
+    );
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || `Burn HTTP ${res.status}`);

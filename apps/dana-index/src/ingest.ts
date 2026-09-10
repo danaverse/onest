@@ -1,16 +1,33 @@
 /**
- * Chronik ingest — scan PAW token history for DANA animal memorial & paw burns.
+ * Chronik ingest — scan PAW token history for DANA memorials, post stamps and votes.
+ *
+ * Cursor model:
+ *   - `paw-token`                newest processed txid (incremental catch-up)
+ *   - `paw-token-backfill-page`  next anti-chronological page to walk (deep history)
+ *
+ * All routes are idempotent (BurnStore.has, unique vote txid, pending-only verify),
+ * so re-processing is safe.
  */
+import { Address } from 'ecash-lib';
 import { ChronikClient, type Tx } from 'chronik-client';
-import { memorialFromOutputScriptHex } from '../../../src/offering/memorialFromScript.js';
-import { burnAtomsFromTokenEntries } from '../../../src/offering/pawAtoms.js';
-import type { BurnStore, IndexedBurn } from './store.js';
+import { danaPushFromOutputScriptHex } from '../../../src/social/danaFromScript.js';
+import type { DanaPush } from '../../../src/social/danaClassify.js';
+import type { BurnStore } from './store.js';
+import type { SocialStore } from './social/socialStore.js';
+import { INGEST_CURSOR_KEY } from './social/socialStore.js';
+import { routeDanaTx, type RouteResult } from './social/txRouting.js';
 
 const DEFAULT_CHRONIK = [
   'https://chronik.e.cash',
   'https://xec.paybutton.org',
   'https://chronik.pay2stay.com/xec',
 ];
+
+export const HISTORY_PAGE_SIZE = 50;
+/** First-run deep walk cap (pages). */
+export const MAX_CATCHUP_PAGES = 40;
+export const BACKFILL_CURSOR_KEY = 'paw-token-backfill-page';
+export const BACKFILL_DONE = 'done';
 
 export function chronikUrlsFromEnv(): string[] {
   const raw = process.env.CHRONIK_URLS?.trim();
@@ -28,114 +45,173 @@ export function createIngestChronik(urls = chronikUrlsFromEnv()): ChronikClient 
   return new ChronikClient(urls);
 }
 
-function memorialFromTx(tx: Tx): ReturnType<typeof memorialFromOutputScriptHex> {
+export function danaFromTx(tx: Tx): DanaPush | null {
   for (const out of tx.outputs ?? []) {
     const hex = out.outputScript;
     if (!hex || typeof hex !== 'string') continue;
-    const m = memorialFromOutputScriptHex(hex);
+    const m = danaPushFromOutputScriptHex(hex);
     if (m) return m;
   }
   return null;
 }
 
-export function burnAtomsFromTx(tx: Tx, tokenId: string): string {
-  return burnAtomsFromTokenEntries(tx.tokenEntries ?? [], tokenId);
-}
-
-function txTouchesToken(tx: Tx, tokenId: string): boolean {
-  const want = tokenId.toLowerCase();
-  for (const te of tx.tokenEntries ?? []) {
-    if (te.tokenId?.toLowerCase() === want) return true;
-  }
-  for (const out of tx.outputs ?? []) {
-    if (out.token?.tokenId?.toLowerCase() === want) return true;
-  }
+/** First input address (P2PKH/P2SH); empty for coinbase or unparseable inputs. */
+export function senderAddressFromTx(tx: Tx): string | null {
   for (const inp of tx.inputs ?? []) {
-    if (inp.token?.tokenId?.toLowerCase() === want) return true;
+    const hex = inp.outputScript;
+    if (!hex || typeof hex !== 'string') continue;
+    try {
+      return Address.fromScriptHex(hex).toString().toLowerCase();
+    } catch {
+      return null;
+    }
   }
-  return false;
+  return null;
 }
 
-export function indexedBurnFromTx(
+export interface IngestTotals {
+  processed: number;
+  memorial: number;
+  post: number;
+  vote: number;
+}
+
+export function emptyTotals(): IngestTotals {
+  return { processed: 0, memorial: 0, post: 0, vote: 0 };
+}
+
+function addRoute(totals: IngestTotals, r: RouteResult): void {
+  totals.processed += 1;
+  if (r.memorial) totals.memorial += 1;
+  if (r.post) totals.post += 1;
+  if (r.vote) totals.vote += 1;
+}
+
+function mergeTotals(dst: IngestTotals, src: IngestTotals): void {
+  dst.processed += src.processed;
+  dst.memorial += src.memorial;
+  dst.post += src.post;
+  dst.vote += src.vote;
+}
+
+export function routeTx(
   tx: Tx,
   tokenId: string,
-  nowIso = new Date().toISOString(),
-): IndexedBurn | null {
-  if (!tx.txid) return null;
-  if (!txTouchesToken(tx, tokenId)) return null;
-  const memorial = memorialFromTx(tx);
-  if (!memorial) return null;
-  if (memorial.version !== 1 && memorial.version !== 2) return null;
-
-  const parent = memorial.parentBurnTxid?.toLowerCase();
-  const burnTxid = tx.txid.toLowerCase();
-  return {
-    burnTxid,
-    tokenId: tokenId.toLowerCase(),
-    note: (memorial.note || '').trim(),
-    offeringId: memorial.offeringId,
-    version: memorial.version,
-    parentBurnTxid: parent,
-    originalBurnTxid: parent || burnTxid,
-    blockHeight: tx.block?.height ?? null,
-    blockTimestamp: tx.block?.timestamp ? Number(tx.block.timestamp) : null,
-    timeFirstSeen: nowIso,
-    burnAtoms: burnAtomsFromTx(tx, tokenId),
-  };
+  burnStore: BurnStore,
+  social: SocialStore,
+  opts?: { voterInstall?: string | null },
+): IngestTotals {
+  const totals = emptyTotals();
+  const push = danaFromTx(tx);
+  if (!push) return totals;
+  const r = routeDanaTx({
+    tx,
+    tokenId,
+    push,
+    burnStore,
+    social,
+    burnedBy: senderAddressFromTx(tx),
+    voterInstall: opts?.voterInstall ?? null,
+  });
+  addRoute(totals, r);
+  return totals;
 }
 
 export async function ingestTxid(
   chronik: ChronikClient,
-  store: BurnStore,
+  burnStore: BurnStore,
+  social: SocialStore,
   txid: string,
   tokenId: string,
-): Promise<boolean> {
+  opts?: { voterInstall?: string | null },
+): Promise<IngestTotals> {
   const id = txid.trim().toLowerCase();
-  if (store.has(id)) return false;
   try {
     const tx = await chronik.tx(id);
-    const item = indexedBurnFromTx(tx, tokenId);
-    if (!item) return false;
-    return store.insert(item);
+    return routeTx(tx, tokenId, burnStore, social, opts);
   } catch (err) {
     console.warn(`Ingest failed for tx ${id}:`, err);
-    return false;
+    return emptyTotals();
   }
 }
 
-export async function backfillRecent(
-  chronik: ChronikClient,
-  store: BurnStore,
-  tokenId: string,
-  page = 0,
-  pageSize = 50,
-): Promise<number> {
-  const history = await chronik.tokenId(tokenId).history(page, pageSize);
-  const txs = history.txs ?? [];
-  let added = 0;
-  for (const tx of txs) {
-    const item = indexedBurnFromTx(tx, tokenId);
-    if (item && store.insert(item)) {
-      added++;
-    }
-  }
-  return added;
+export interface SyncResult extends IngestTotals {
+  newestTxid: string | null;
+  backfillDone: boolean;
 }
 
-export async function ingestUnconfirmed(
+/**
+ * Incremental catch-up from the newest tx back to the cursor, plus one page of
+ * deep-history backfill per pass until the token history is fully walked.
+ */
+export async function syncTokenHistory(
   chronik: ChronikClient,
-  store: BurnStore,
   tokenId: string,
-): Promise<number> {
-  const history = await chronik.tokenId(tokenId).history(0, 30);
-  const txs = history.txs ?? [];
-  let added = 0;
-  for (const tx of txs) {
-    if (tx.block) continue;
-    const item = indexedBurnFromTx(tx, tokenId);
-    if (item && store.insert(item)) {
-      added++;
+  burnStore: BurnStore,
+  social: SocialStore,
+): Promise<SyncResult> {
+  const totals = emptyTotals();
+  const cursor = chronik.tokenId(tokenId);
+
+  const lastSeen = social.getIngestCursor(INGEST_CURSOR_KEY);
+  let newestTxid: string | null = null;
+  let page = 0;
+  let coveredToCursor = lastSeen == null;
+
+  while (page < MAX_CATCHUP_PAGES) {
+    const history = await cursor.history(page, HISTORY_PAGE_SIZE);
+    const txs = history.txs ?? [];
+    if (page === 0 && txs[0]) newestTxid = txs[0].txid.toLowerCase();
+    if (txs.length === 0) {
+      coveredToCursor = true;
+      break;
+    }
+    let sawCursor = false;
+    for (const tx of txs) {
+      if (lastSeen && tx.txid.toLowerCase() === lastSeen) {
+        sawCursor = true;
+        break;
+      }
+      mergeTotals(totals, routeTx(tx, tokenId, burnStore, social));
+    }
+    if (sawCursor) {
+      coveredToCursor = true;
+      break;
+    }
+    if (txs.length < HISTORY_PAGE_SIZE) {
+      coveredToCursor = true;
+      break;
+    }
+    page += 1;
+  }
+
+  if (newestTxid) social.setIngestCursor(newestTxid);
+  if (lastSeen == null) {
+    social.setIngestCursor(
+      coveredToCursor ? BACKFILL_DONE : String(page + 1),
+      BACKFILL_CURSOR_KEY,
+    );
+  }
+
+  let backfillDone = social.getIngestCursor(BACKFILL_CURSOR_KEY) === BACKFILL_DONE;
+  if (!backfillDone) {
+    const raw = social.getIngestCursor(BACKFILL_CURSOR_KEY);
+    const bfPage = Number.parseInt(raw ?? '0', 10);
+    const bf = Number.isFinite(bfPage) && bfPage >= 0 ? bfPage : 0;
+    const history = await cursor.history(bf, HISTORY_PAGE_SIZE);
+    const txs = history.txs ?? [];
+    for (const tx of txs) {
+      mergeTotals(totals, routeTx(tx, tokenId, burnStore, social));
+    }
+    const next = bf + 1;
+    const numPages = history.numPages ?? 0;
+    if (txs.length === 0 || next >= numPages) {
+      social.setIngestCursor(BACKFILL_DONE, BACKFILL_CURSOR_KEY);
+      backfillDone = true;
+    } else {
+      social.setIngestCursor(String(next), BACKFILL_CURSOR_KEY);
     }
   }
-  return added;
+
+  return { ...totals, newestTxid, backfillDone };
 }

@@ -674,3 +674,254 @@ body {
   padding: 0.5rem 0;
 }
 
+/* ---------------------------------------------------------------- social feed */
+
+.hero-action {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.btn-share-moment {
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+}
+
+.btn-share-moment:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+}
+
+.feed-section {
+  margin-bottom: 2rem;
+}
+
+.feed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.feed-head h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.post-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 560px) {
+  .post-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.post-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.post-card-media img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+
+.post-card-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.post-card-pet {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.post-card-caption {
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.post-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.post-card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.post-card-pending {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+}
+
+.feed-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.vote-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-vote:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn-vote:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vote-arrow {
+  font-size: 0.7rem;
+}
+
+.vote-progress {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.post-composer-modal,
+.post-detail-modal {
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.post-composer-modal input[type='file'] {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.post-detail-media {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.post-detail-media img {
+  width: 100%;
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.post-detail-caption {
+  font-size: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 1rem;
+}
+
+.post-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.comments-section h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.comment-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.comment-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
+.comment-body {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.comment-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.comment-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.comment-form input {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.comment-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+

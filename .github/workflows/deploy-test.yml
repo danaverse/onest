@@ -107,9 +107,25 @@ jobs:
             ./ \
             "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
 
-          echo "Updating backend code permissions and restarting services if present..."
+          echo "Updating backend code permissions..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true; \
+            sudo chown -R '${SSH_USER}:${SSH_USER}' '${REPO_DEST}' 2>/dev/null || true"
+
+          echo "Installing backend dependencies on the VM (better-sqlite3, drizzle)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
+
+          echo "Syncing soft-wait config into /etc/onest/mint.env..."
+          SOFT_WAIT="${{ vars.MINT_MIN_PRAY_SECONDS || '54' }}"
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            sudo mkdir -p /etc/onest; \
+            sudo touch /etc/onest/mint.env; \
+            sudo sed -i '/^MINT_MIN_PRAY_SECONDS=/d' /etc/onest/mint.env; \
+            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' | sudo tee -a /etc/onest/mint.env > /dev/null; \
+            sudo chmod 600 /etc/onest/mint.env"
+
+          echo "Restarting services (social DB migrations run at dana-index startup)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
             sudo systemctl try-restart onest-dana-index 2>/dev/null || systemctl try-restart onest-dana-index 2>/dev/null || true; \
             sudo systemctl try-restart onest-mint-api 2>/dev/null || systemctl try-restart onest-mint-api 2>/dev/null || true"
 

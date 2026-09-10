@@ -52,6 +52,18 @@ import {
   isPawFeltCovenant,
 } from '../../../src/params/pawMint.js';
 import {
+  encodePostStampPushdata,
+  encodeVotePushdata,
+  normalizeHex64,
+  normalizeVoteDirection,
+  VOTE_TARGET_TYPE_POST,
+  type VoteDirection,
+} from '../../../src/social/danaSocial.js';
+import {
+  minPrayWaitUntilMs,
+  parseMinPraySeconds,
+} from '../../../src/lib/minPray.js';
+import {
   assertDeskTokenId,
 } from '../../../src/params/pawTokens.js';
 import {
@@ -121,6 +133,21 @@ function servingTipIndex(): number {
 const CHALLENGE_TTL_MS = 15 * 60_000;
 const PENDING_BURN_TTL_MS = 15 * 60_000;
 
+/** Server-enforced soft wait ("min pray"). Default 54s, 0 disables. */
+const MIN_PRAY_SECONDS = parseMinPraySeconds(process.env.MINT_MIN_PRAY_SECONDS);
+
+export type BurnKind = 'memorial' | 'post' | 'vote';
+
+/** Thrown by /api/burn when the soft wait has not elapsed yet. */
+export class WaitNotElapsedError extends Error {
+  readonly retryAfterMs: number;
+  constructor(retryAfterMs: number) {
+    super('Soft wait not elapsed');
+    this.name = 'WaitNotElapsedError';
+    this.retryAfterMs = Math.max(0, Math.ceil(retryAfterMs));
+  }
+}
+
 export interface OfferResult {
   remintTxid: string;
   burnTxid: string;
@@ -136,6 +163,10 @@ export interface OfferResult {
   note: string;
   explorerRemint: string;
   explorerBurn: string;
+  kind: BurnKind;
+  /** ISO time before which the desk will reject the burn (soft wait). */
+  waitUntil: string;
+  minPraySeconds: number;
 }
 
 export interface BurnResult {
@@ -147,6 +178,7 @@ export interface BurnResult {
   note: string;
   explorerRemint: string;
   explorerBurn: string;
+  kind: BurnKind;
 }
 
 export interface ChallengePublic {
@@ -168,6 +200,12 @@ export interface ChallengePublic {
   mintAtoms: string;
   note: string;
   parentBurnTxid?: string;
+  kind: BurnKind;
+  contentHash?: string;
+  postHash?: string;
+  direction?: VoteDirection;
+  targetType?: number;
+  minPraySeconds: number;
 }
 
 interface ActiveChallenge {
@@ -184,6 +222,11 @@ interface ActiveChallenge {
   prepared: MooreTipRemintPrepared;
   note: string;
   parentBurnTxid?: string;
+  kind: BurnKind;
+  contentHash?: string;
+  postHash?: string;
+  voteDirection?: VoteDirection;
+  voteTargetType?: number;
 }
 
 interface PendingBurn {
@@ -194,8 +237,14 @@ interface PendingBurn {
   tipIndex: number;
   note: string;
   parentBurnTxid?: string;
+  kind: BurnKind;
+  contentHash?: string;
+  postHash?: string;
+  voteDirection?: VoteDirection;
+  voteTargetType?: number;
   createdAt: number;
   expiresAt: number;
+  waitUntilMs: number;
 }
 
 type OnestDep = {
@@ -270,7 +319,7 @@ export function requireMintDesk(): void {
   if (dep.tokenId) assertDeskTokenId(dep.tokenId);
 }
 
-function notifyDanaIndex(burnTxid: string): void {
+function notifyDanaIndex(burnTxid: string, installId?: string): void {
   const base = process.env.DANA_INDEX_URL?.trim();
   if (!base) return;
   const url = `${base.replace(/\/$/, '')}/api/notify`;
@@ -280,7 +329,7 @@ function notifyDanaIndex(burnTxid: string): void {
   void fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ burnTxid }),
+    body: JSON.stringify({ burnTxid, installId }),
   }).catch(err => {
     console.warn('dana-index notify failed', err);
   });
@@ -301,18 +350,51 @@ export function publicStatus(installId?: string) {
     servingTipIndex: servingTipIndex(),
     servingTipCount: servingTipCount(),
     raceOpen: true,
+    minPraySeconds: MIN_PRAY_SECONDS,
+    burnKinds: ['memorial', 'post', 'vote'],
   };
 }
 
-export async function enqueueChallenge(opts: {
+export interface ChallengeInput {
   installId: string;
   clientIp?: string;
+  kind?: string;
   note?: string;
   parentBurnTxid?: string;
-}): Promise<ChallengePublic> {
+  contentHash?: string;
+  postHash?: string;
+  direction?: unknown;
+  targetType?: unknown;
+}
+
+export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengePublic> {
   const dep = loadDepJson();
   if (!dep.tokenId) {
     throw new Error('No PAW TOKEN_ID configured');
+  }
+
+  const kind: BurnKind =
+    opts.kind === 'post' ? 'post' : opts.kind === 'vote' ? 'vote' : 'memorial';
+  let contentHash: string | undefined;
+  let postHash: string | undefined;
+  let voteDirection: VoteDirection | undefined;
+  let voteTargetType: number | undefined;
+  if (kind === 'post') {
+    contentHash = normalizeHex64(opts.contentHash) ?? undefined;
+    if (!contentHash) throw new Error('contentHash required (64 hex) for post stamps');
+  }
+  if (kind === 'vote') {
+    postHash = normalizeHex64(opts.postHash) ?? undefined;
+    if (!postHash) throw new Error('postHash required (64 hex) for votes');
+    const direction = normalizeVoteDirection(opts.direction ?? 1);
+    if (direction == null) throw new Error('direction must be up (1) or down (0)');
+    voteDirection = direction;
+    const rawTarget =
+      opts.targetType == null ? VOTE_TARGET_TYPE_POST : Number(opts.targetType);
+    if (!Number.isInteger(rawTarget) || rawTarget < 0 || rawTarget > 0xffff) {
+      throw new Error('targetType out of range');
+    }
+    voteTargetType = rawTarget;
   }
 
   dailyOffers.consume(opts.installId);
@@ -403,6 +485,11 @@ export async function enqueueChallenge(opts: {
     prepared: prep,
     note,
     parentBurnTxid: opts.parentBurnTxid,
+    kind,
+    contentHash,
+    postHash,
+    voteDirection,
+    voteTargetType,
   };
 
   challenges.set(challengeId, active);
@@ -426,6 +513,12 @@ export async function enqueueChallenge(opts: {
     mintAtoms: PAW_MINT_ATOMS.toString(),
     note,
     parentBurnTxid: opts.parentBurnTxid,
+    kind,
+    contentHash,
+    postHash,
+    direction: voteDirection,
+    targetType: voteTargetType,
+    minPraySeconds: MIN_PRAY_SECONDS,
   };
 }
 
@@ -469,6 +562,7 @@ export async function enqueueSubmit(opts: {
   }
 
   const burnToken = randomBytes(32).toString('hex');
+  const waitUntilMs = minPrayWaitUntilMs(ch.createdAt, MIN_PRAY_SECONDS);
 
   pendingBurns.set(remintTxid, {
     installId: opts.installId,
@@ -478,8 +572,14 @@ export async function enqueueSubmit(opts: {
     tipIndex: ch.tipIndex,
     note: ch.note,
     parentBurnTxid: ch.parentBurnTxid,
+    kind: ch.kind,
+    contentHash: ch.contentHash,
+    postHash: ch.postHash,
+    voteDirection: ch.voteDirection,
+    voteTargetType: ch.voteTargetType,
     createdAt: Date.now(),
     expiresAt: Date.now() + PENDING_BURN_TTL_MS,
+    waitUntilMs,
   });
 
   const powMs = opts.powMs != null && opts.powMs > 0 ? Math.round(opts.powMs) : 0;
@@ -500,6 +600,9 @@ export async function enqueueSubmit(opts: {
     note: ch.note,
     explorerRemint: explorerTx(remintTxid),
     explorerBurn: '',
+    kind: ch.kind,
+    waitUntil: new Date(waitUntilMs).toISOString(),
+    minPraySeconds: MIN_PRAY_SECONDS,
   };
 }
 
@@ -513,20 +616,37 @@ export async function enqueueBurn(opts: {
     throw new Error('No pending burn matching remintTxid and burnToken');
   }
 
+  const waitRemainingMs = pending.waitUntilMs - Date.now();
+  if (waitRemainingMs > 0) {
+    throw new WaitNotElapsedError(waitRemainingMs);
+  }
+
   pendingBurns.delete(opts.remintTxid);
 
   const chronik = await createChronik();
   const tipWallet = await loadTipFeeWallet(chronik, pending.tipIndex);
 
+  let pushdata: Uint8Array | undefined;
+  if (pending.kind === 'post' && pending.contentHash) {
+    pushdata = encodePostStampPushdata(pending.contentHash);
+  } else if (pending.kind === 'vote' && pending.postHash && pending.voteDirection != null) {
+    pushdata = encodeVotePushdata({
+      direction: pending.voteDirection,
+      postHash: pending.postHash,
+      targetType: pending.voteTargetType,
+    });
+  }
+
   const burnRes = await burnOnePaw({
     wallet: tipWallet.wallet,
     tokenId: pending.tokenId,
-    note: pending.note,
+    note: pending.kind === 'memorial' ? pending.note : '',
     parentBurnTxid: pending.parentBurnTxid,
     burnAtoms: 1n,
+    pushdata,
   });
 
-  notifyDanaIndex(burnRes.txid);
+  notifyDanaIndex(burnRes.txid, opts.installId);
   rememberRootCreator(pending.parentBurnTxid || burnRes.txid, opts.installId);
 
   return {
@@ -535,9 +655,10 @@ export async function enqueueBurn(opts: {
     tokenId: pending.tokenId,
     deskAtomsKept: Number(PAW_MINER_ATOMS) - 1,
     burnAtoms: '1',
-    note: pending.note,
+    note: pending.kind === 'memorial' ? pending.note : '',
     explorerRemint: explorerTx(pending.remintTxid),
     explorerBurn: explorerTx(burnRes.txid),
+    kind: pending.kind,
   };
 }
 

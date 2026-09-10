@@ -41,3 +41,27 @@ export async function readJsonBody(
     unknown
   >;
 }
+
+/** Read a raw binary body (media upload) with the same hard cap semantics. */
+export async function readRawBody(
+  req: IncomingMessage,
+  maxBytes: number,
+): Promise<Buffer> {
+  const declared = Number(req.headers['content-length'] || 0);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    req.destroy();
+    throw new PayloadTooLargeError(maxBytes);
+  }
+  const chunks: Buffer[] = [];
+  let n = 0;
+  for await (const c of req) {
+    const buf = Buffer.isBuffer(c) ? c : Buffer.from(c);
+    n += buf.length;
+    if (n > maxBytes) {
+      req.destroy();
+      throw new PayloadTooLargeError(maxBytes);
+    }
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
+}
