@@ -1,3 +1,4 @@
+import { useLocale } from '../i18n/LocaleContext.js';
 import { mediaUrl, type FeedPost } from '../lib/socialApi.js';
 import { VoteButton } from './VoteButton.js';
 
@@ -7,6 +8,7 @@ export function PostCard(props: {
   onOpen: () => void;
   onVoted?: (post: FeedPost) => void;
 }) {
+  const { t } = useLocale();
   const first = props.post.media[0];
   const name =
     props.petName || `Pet ${props.post.petRootTxid.slice(0, 8)}…`;
@@ -27,7 +29,7 @@ export function PostCard(props: {
             {new Date(props.post.createdAt).toLocaleDateString()}
           </span>
           {props.post.status !== 'verified' && (
-            <span className="post-card-pending">pending</span>
+            <span className="post-card-pending">{t('pending')}</span>
           )}
         </div>
       </div>

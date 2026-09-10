@@ -89,7 +89,7 @@ export function PostDetailModal(props: {
           </button>
         </div>
 
-        {loading && <div className="loading-state">Loading...</div>}
+        {loading && <div className="loading-state">{t('loading')}</div>}
         {err && <div className="error-box">{err}</div>}
 
         {post && (

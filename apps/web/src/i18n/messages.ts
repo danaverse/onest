@@ -47,7 +47,9 @@ export type MessageKey =
   | 'comments'
   | 'noCommentsYet'
   | 'commentPlaceholder'
-  | 'sendComment';
+  | 'sendComment'
+  | 'pending'
+  | 'loading';
 
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -99,6 +101,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: 'No comments yet.',
     commentPlaceholder: 'Leave a kind word...',
     sendComment: 'Send',
+    pending: 'Pending',
+    loading: 'Loading...',
   },
   vi: {
     brand: 'Onest',
@@ -149,6 +153,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: 'Chưa có bình luận nào.',
     commentPlaceholder: 'Gửi lời nhắn yêu thương...',
     sendComment: 'Gửi',
+    pending: 'Đang chờ',
+    loading: 'Đang tải...',
   },
   zh: {
     brand: 'Onest',
@@ -198,6 +204,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: '还没有评论。',
     commentPlaceholder: '留下温暖的话语...',
     sendComment: '发送',
+    pending: '确认中',
+    loading: '加载中...',
   },
 };
 
