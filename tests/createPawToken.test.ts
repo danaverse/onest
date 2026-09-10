@@ -5,6 +5,7 @@ import {
 } from '../src/params/tokenCli.js';
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('create-paw-token CLI argument parsing & config resolution', () => {
   const origEnv = process.env;
@@ -122,7 +123,7 @@ describe('create-paw-token CLI argument parsing & config resolution', () => {
 });
 
 describe('updateEnvFile helper', () => {
-  const tempEnv = resolve(process.cwd(), 'data/test-temp.env');
+  const tempEnv = resolve(tmpdir(), 'onest-test-temp.env');
 
   afterEach(() => {
     if (existsSync(tempEnv)) {
