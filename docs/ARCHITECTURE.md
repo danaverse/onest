@@ -172,12 +172,13 @@ Soft wait ("min pray") is **enforced server-side in `mint-api`** — the WLotus 
 
 Today the wait is only time (plus the one-time offer PoW), so a farm can idle for 54s and collect a sponsored stamp. Future: **keep the device proving work during the wait**.
 
-- On submit, `mint-api` opens a **heartbeat session** tied to the pending burn and returns the first tick challenge.
-- Each tick is a small PoW calibrated off the device's observed hashrate (`powAttempts / powMs` from the offer) to target ~`MINT_WAIT_TICK_SECONDS` (default 5s) on a standard WebGPU miner; a difficulty floor keeps CPU-only devices able to finish.
-- The client mines ticks continuously and POSTs each solved nonce; the desk verifies, marks the tick and issues the next.
-- `/api/burn` requires minimum coverage (`ceil(wait / tick) - slack`), e.g. 9 ticks over 54s with slack 2. No coverage, no burn. Cancel/abandon still skips the burn and the desk keeps the atom.
-- Anti-replay: single-use tick ids, nonce bound to the pending burn, server-side timing.
-- Config: `MINT_WAIT_TICK_SECONDS`, `MINT_WAIT_TICK_SLACK`, difficulty floor/cap — GitHub Actions variable → `/etc/onest/mint.env`.
+- On submit, `mint-api` opens a **heartbeat session** tied to the pending burn and returns the first beat challenge.
+- The wait is divided into **6-second beats**: with the default 54s wait that is **9 beats** (`ceil(wait / MINT_WAIT_TICK_SECONDS)`).
+- Each beat is a small PoW calibrated off the device's observed hashrate (`powAttempts / powMs` from the offer) to **solve in ~2–4s** on a standard WebGPU miner; the remaining ~2–4s of the beat is submission slack. A difficulty floor keeps CPU-only devices able to finish.
+- The client mines beats continuously and POSTs each solved nonce; the desk verifies, marks the beat and issues the next.
+- `/api/burn` requires minimum beat coverage (allow ~1 missed beat for slow devices/networks). No coverage, no burn. Cancel/abandon still skips the burn and the desk keeps the atom.
+- Anti-replay: single-use beat ids, nonce bound to the pending burn, server-side timing.
+- Config: `MINT_WAIT_TICK_SECONDS` (beat length, default 6), `MINT_WAIT_TICK_TARGET_MS` (target solve, default 3000), `MINT_WAIT_TICK_SLACK_BEATS` (default 1), difficulty floor/cap — GitHub Actions variable → `/etc/onest/mint.env`.
 - Honest limit: a farm can mine through the wait too. The point is to raise the **marginal cost per stamp** (compute for the whole wait) and require live presence, not to be a Sybil proof. It composes with Turnstile, daily caps and the XEC-gated user profile below.
 - Never delays remint; heartbeats gate the burn only.
 
@@ -224,7 +225,7 @@ A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It i
 **Rules**
 
 - **A pet profile requires a user profile.** No wallet, no animal profile.
-- Pet profile creation **costs the user XEC** (a small toll plus network fees, configurable). This replaces the sponsored path for profile creation so spamming pet profiles costs real money.
+- Pet profile creation **costs the user PAW, not XEC**: a **6-atom listing fee paid to the desk on each burn** (`PAW_LISTING_FEE_ATOMS`, default 6). The wallet must hold PAW to pay it, so spamming pet profiles costs real token value. XEC is only needed for network fees when the user pays their own way.
 - Memorial tributes, posts and votes keep the sponsored fallback for casual users until user profiles are common; after that the wallet becomes the PAW inventory and weighted votes spend the voter's PAW (see the wallet-only migration in the votes section).
 
 **Seeds**
@@ -237,7 +238,7 @@ A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It i
 **Flow (proposed, first release)**
 
 1. "Create user profile" → generate or restore wallet → show the XEC deposit address.
-2. Pet profile creation requires the wallet and pays the small XEC toll. The desk keeps the existing sponsored remint/burn for the PAW side, so issuance is unchanged; only the toll and the wallet requirement are new.
+2. Pet profile creation requires the wallet, burns 1 PAW for the memorial and pays the **6-atom listing fee** to the desk in the same flow. The desk keeps the existing sponsored remint for the PAW side, so issuance is unchanged; only the wallet requirement and the listing fee are new.
 3. Later, the remint fast path credits the wallet directly and tributes/posts/votes can spend user PAW.
 
 ---
@@ -304,8 +305,8 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 | Object store | Cloudflare R2 (zero egress) or S3-compatible; presigned PUT reusing the sha256 key |
 | Image variants | Cloudflare Images later (resize / WebP), not required for beta |
 | Bot check | Turnstile on sponsored challenge |
-| User profiles / wallet | In-app `ecash-wallet` (BIP39 + encrypted seed, backup/restore); pet profiles require the wallet + XEC toll; wallet-only weighted votes later |
-| Heartbeat PoW | Future: calibrated mini-PoW ticks during the soft wait; burn requires tick coverage |
+| User profiles / wallet | In-app `ecash-wallet` (BIP39 + encrypted seed, backup/restore); pet profiles require the wallet + a 6-atom PAW listing fee; wallet-only weighted votes later |
+| Heartbeat PoW | Future: 6s mini-PoW beats during the soft wait (9 beats over the default 54s); burn requires beat coverage |
 | Backups | `sqlite3 .backup` timer for the social DB; R2 lifecycle for orphaned objects |
 
 No Nest, no Prisma, no Redis, no second language. One monorepo, two Node services, one PWA.
@@ -324,8 +325,8 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 8. **Comments** — shipped: hosted (author soft-delete); optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
 10. **Postgres** — only after a second writer or a real ops need.
-11. **User profiles** — in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore; pet profile creation requires the wallet and a small XEC toll (anti-spam).
-12. **Wait-time heartbeat PoW** — future anti-farming: calibrated mini-PoW ticks through the soft wait; `/api/burn` requires tick coverage.
+11. **User profiles** — in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore; pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk (anti-spam).
+12. **Wait-time heartbeat PoW** — future anti-farming: 6s calibrated mini-PoW beats through the soft wait (9 beats over the default 54s); `/api/burn` requires beat coverage.
 
 ---
 
@@ -341,7 +342,7 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 - **Vote UX:** MVP is a single **+1** PAW vote; amount presets and an optional per-tx cap (suggested 108) come after launch. Stacked burns stand: **sum atoms, no one-vote-per-identity lock.**
 - **Sponsored vote path:** MVP +1 sponsored allowed (PoW + soft wait + daily caps as the farming bound); N > 1 stays **no**. Migrate to **wallet-only** weighted votes when farming becomes indefensible.
 - **Comments:** phase 2 (hosted), same identity rules as posts.
-- **User profiles (planned):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase with backup/restore. **Pet profile creation requires the wallet and a small XEC toll** (anti-spam); tributes/posts/votes keep the sponsored fallback until user profiles are common, then weighted votes spend the voter's PAW.
-- **Wait-time heartbeat PoW (future):** during the soft wait the client solves small server-issued PoW ticks calibrated to ~`MINT_WAIT_TICK_SECONDS` (default 5s) on a standard WebGPU miner; `/api/burn` requires tick coverage (`ceil(wait/tick) - slack`). Raises marginal farming cost and requires presence; never delays remint.
+- **User profiles (planned):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase with backup/restore. **Pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**. Tributes/posts/votes keep the sponsored fallback until user profiles are common, then weighted votes spend the voter's PAW.
+- **Wait-time heartbeat PoW (future):** the soft wait is split into **6s beats** (9 beats for the default 54s wait); each beat solves in ~2–4s on a standard WebGPU miner and the rest of the beat is slack. `/api/burn` requires beat coverage (allow ~1 miss). Raises marginal farming cost and requires presence; never delays remint.
 
 Change a decision here rather than scattering notes in PR descriptions.
