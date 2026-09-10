@@ -71,6 +71,8 @@ export async function burnOnePaw(opts: {
   parentBurnTxid?: string;
   burnAtoms?: bigint;
   changeScript?: Script;
+  /** Raw DANA pushdata override (v3 vote / v4 post stamp). */
+  pushdata?: Uint8Array;
 }): Promise<{ txid: string; burnAtoms: bigint }> {
   const note = (opts.note ?? '').trim();
   const offeringId = opts.offeringId ?? OFFERING_ID_PAW;
@@ -116,7 +118,7 @@ export async function burnOnePaw(opts: {
       },
       {
         type: 'DATA',
-        data: memorialPushdata(note, offeringId, parentBurnTxid),
+        data: opts.pushdata ?? memorialPushdata(note, offeringId, parentBurnTxid),
       },
     ];
 

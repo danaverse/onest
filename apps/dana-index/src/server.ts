@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * Onest DANA Index server — Chronik-backed public history of PAW animal memorials.
+ * Onest DANA Index server — Chronik-backed public history of PAW animal
+ * memorials plus the social feed (posts, votes, comments, media).
  *
  *   GET  /health
  *   GET  /api/recent?limit=40
@@ -9,21 +10,49 @@
  *   GET  /api/memorial/:txid
  *   GET  /og/:txid
  *   GET  /:txid
- *   POST /api/notify { burnTxid }
+ *   GET  /api/feed?limit=&beforeCreatedAt=&beforeId=&q=
+ *   GET  /api/feed/trending?limit=
+ *   GET  /api/posts/:id
+ *   GET  /api/pets/:txid/posts
+ *   PUT  /api/media/:sha256?installId=
+ *   GET  /media/:sha256
+ *   POST /api/posts
+ *   POST /api/posts/:id/comments
+ *   POST /api/posts/:id/remove
+ *   POST /api/comments/:id/remove
+ *   POST /api/notify { burnTxid, installId? }
  */
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import {
-  backfillRecent,
   createIngestChronik,
   ingestTxid,
-  ingestUnconfirmed,
+  syncTokenHistory,
 } from './ingest.js';
 import { buildOgHtml, resolveOgLocale } from './ogPreview.js';
 import { BurnStore, TRENDING_GRAVITY } from './store.js';
-import { readJsonBody, PayloadTooLargeError } from '../../../src/lib/httpJson.js';
+import { openSocialDb } from './social/db.js';
+import { SocialStore } from './social/socialStore.js';
+import { MediaStore } from './social/mediaStore.js';
+import {
+  computePostContentHash,
+  validatePostContentInput,
+} from '../../../src/social/contentHash.js';
+import { MAX_MEDIA_BYTES, normalizeComment } from '../../../src/social/media.js';
+import { isHex64, normalizeHex64 } from '../../../src/social/danaSocial.js';
+import {
+  readJsonBody,
+  readRawBody,
+  PayloadTooLargeError,
+} from '../../../src/lib/httpJson.js';
 import { allowIndexNotify } from '../../../src/lib/indexNotifyAuth.js';
+import {
+  createDailyCounter,
+  createRollingWindowCounter,
+  normalizeClientIp,
+} from '../../../src/lib/rateLimit.js';
 
 loadEnv({ path: resolve(process.cwd(), '.env') });
 loadEnv({ path: process.env.ONEST_DANA_INDEX_ENV ?? '/etc/onest/dana-index.env', override: true });
@@ -36,6 +65,12 @@ const TOKEN_ID =
 const STORE_PATH =
   process.env.DANA_INDEX_STORE?.trim() ||
   resolve(process.cwd(), 'data/dana-index-burns.json');
+const SOCIAL_DB_PATH =
+  process.env.ONEST_SOCIAL_DB?.trim() ||
+  resolve(process.cwd(), 'data/onest-social.sqlite');
+const MEDIA_DIR =
+  process.env.ONEST_MEDIA_DIR?.trim() ||
+  resolve(process.cwd(), 'data/media');
 const POLL_MS = Math.max(
   5_000,
   Number(process.env.DANA_INDEX_POLL_MS?.trim() || 30_000),
@@ -48,13 +83,51 @@ const SITE_ORIGIN = (
 const STARTED_AT = new Date().toISOString();
 const NOTIFY_SECRET = process.env.DANA_INDEX_NOTIFY_SECRET?.trim() || '';
 
+const MAX_POSTS_PER_DAY = Math.max(
+  1,
+  Number(process.env.ONEST_MAX_POSTS_PER_DAY?.trim() || 10) || 10,
+);
+const MAX_COMMENTS_PER_DAY = Math.max(
+  1,
+  Number(process.env.ONEST_MAX_COMMENTS_PER_DAY?.trim() || 50) || 50,
+);
+const MAX_UPLOADS_PER_DAY = Math.max(
+  1,
+  Number(process.env.ONEST_MAX_UPLOADS_PER_DAY?.trim() || 40) || 40,
+);
+const MAX_WRITES_PER_IP_PER_MIN = Math.max(
+  1,
+  Number(process.env.ONEST_MAX_WRITES_PER_IP_PER_MIN?.trim() || 60) || 60,
+);
+
 const store = new BurnStore(STORE_PATH);
+const { sqlite, db } = openSocialDb(SOCIAL_DB_PATH);
+const social = new SocialStore(sqlite, db);
+const mediaStore = new MediaStore(MEDIA_DIR);
 const chronik = createIngestChronik();
+
+const postsPerDay = createDailyCounter(
+  MAX_POSTS_PER_DAY,
+  n => `Daily post limit reached (${n} per day).`,
+);
+const commentsPerDay = createDailyCounter(
+  MAX_COMMENTS_PER_DAY,
+  n => `Daily comment limit reached (${n} per day).`,
+);
+const uploadsPerDay = createDailyCounter(
+  MAX_UPLOADS_PER_DAY,
+  n => `Daily upload limit reached (${n} per day).`,
+);
+const writesPerIpPerMin = createRollingWindowCounter(
+  MAX_WRITES_PER_IP_PER_MIN,
+  60_000,
+  n => `Too many writes from this network (${n}/min). Try again shortly.`,
+);
 
 function cors(res: import('node:http').ServerResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Onest-Install-Id');
 }
 
 function json(
@@ -75,6 +148,36 @@ function html(
   cors(res);
   res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(body);
+}
+
+class BadRequestError extends Error {}
+
+function requireInstallId(raw: unknown): string {
+  const installId = String(raw || '').trim();
+  if (!installId || installId.length < 8 || installId.length > 128) {
+    throw new BadRequestError('installId required (8–128 chars)');
+  }
+  return installId;
+}
+
+function clientIp(req: import('node:http').IncomingMessage): string {
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) return realIp;
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded;
+  if (Array.isArray(forwarded) && forwarded.length) return forwarded[0]!;
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
+function mediaHeaders(mime: string, bytes: number): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': mime,
+    'Content-Length': String(bytes),
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Disposition': 'inline',
+  };
 }
 
 const server = createServer(async (req, res) => {
@@ -101,9 +204,13 @@ const server = createServer(async (req, res) => {
         startedAt: STARTED_AT,
         tokenId: TOKEN_ID || null,
         totalBurns: store.recent(1).length ? store.groups().length : 0,
+        totalPosts: social.countPosts(),
+        ingestCursor: social.getIngestCursor(),
       });
       return;
     }
+
+    // ------------------------------------------------------------- memories
 
     if (req.method === 'GET' && normPath === '/api/recent') {
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 40)));
@@ -142,6 +249,239 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // ------------------------------------------------------------- social feed
+
+    if (req.method === 'GET' && normPath === '/api/feed/trending') {
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+      json(res, 200, { ok: true, posts: social.listTrending(14, limit) });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/api/feed') {
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+      const beforeCreatedAt = Number(url.searchParams.get('beforeCreatedAt') || 0);
+      const beforeId = normalizeHex64(url.searchParams.get('beforeId'));
+      const q = (url.searchParams.get('q') || '').trim();
+      const posts = social.listFeed({
+        limit,
+        beforeCreatedAt: beforeCreatedAt > 0 ? beforeCreatedAt : undefined,
+        beforeId: beforeId ?? undefined,
+        q: q || undefined,
+      });
+      const last = posts[posts.length - 1];
+      json(res, 200, {
+        ok: true,
+        posts,
+        next:
+          posts.length === limit && last
+            ? { beforeCreatedAt: last.createdAt, beforeId: last.id }
+            : null,
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath.startsWith('/api/posts/')) {
+      const postId = normalizeHex64(normPath.slice('/api/posts/'.length));
+      if (!postId) {
+        json(res, 400, { error: 'valid post id required' });
+        return;
+      }
+      const post = social.getPost(postId);
+      if (!post) {
+        json(res, 404, { error: 'post not found' });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        post,
+        comments: social.listComments(postId, 100),
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath.startsWith('/api/pets/')) {
+      const rest = normPath.slice('/api/pets/'.length);
+      const rootTxid = normalizeHex64(rest.replace(/\/posts$/, ''));
+      if (!rootTxid) {
+        json(res, 400, { error: 'valid pet root txid required' });
+        return;
+      }
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
+      json(res, 200, { ok: true, posts: social.listByPetRoot(rootTxid, limit) });
+      return;
+    }
+
+    // ------------------------------------------------------------- media
+
+    if (req.method === 'GET' && normPath.startsWith('/media/')) {
+      const sha = normPath.slice('/media/'.length).trim().toLowerCase();
+      if (!isHex64(sha)) {
+        json(res, 400, { error: 'valid sha256 required' });
+        return;
+      }
+      const meta = social.getMedia(sha);
+      const bytes = mediaStore.read(sha);
+      if (!meta || !bytes) {
+        json(res, 404, { error: 'media not found' });
+        return;
+      }
+      res.writeHead(200, mediaHeaders(meta.mime, bytes.length));
+      res.end(bytes);
+      return;
+    }
+
+    if (req.method === 'PUT' && normPath.startsWith('/api/media/')) {
+      const sha = normPath.slice('/api/media/'.length).trim().toLowerCase();
+      if (!isHex64(sha)) {
+        json(res, 400, { error: 'valid sha256 key required' });
+        return;
+      }
+      const installId = requireInstallId(
+        url.searchParams.get('installId') || req.headers['x-onest-install-id'],
+      );
+      uploadsPerDay.consume(installId);
+      writesPerIpPerMin.consume(normalizeClientIp(clientIp(req)));
+
+      const body = await readRawBody(req, MAX_MEDIA_BYTES + 1);
+      let stored;
+      try {
+        stored = mediaStore.put(body, sha);
+      } catch (e) {
+        json(res, 400, { error: e instanceof Error ? e.message : 'invalid media' });
+        return;
+      }
+      social.insertMedia({
+        sha256: stored.sha256,
+        mime: stored.mime,
+        bytes: stored.bytes,
+        objectKey: stored.sha256,
+        createdAt: Date.now(),
+      });
+      json(res, 200, { ok: true, ...stored });
+      return;
+    }
+
+    // ------------------------------------------------------------- posts
+
+    if (req.method === 'POST' && normPath === '/api/posts') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      postsPerDay.consume(installId);
+      writesPerIpPerMin.consume(normalizeClientIp(clientIp(req)));
+
+      const mediaHashes = Array.isArray(body.mediaHashes)
+        ? body.mediaHashes.map(v => String(v))
+        : [];
+      const check = validatePostContentInput({
+        caption: typeof body.caption === 'string' ? body.caption : '',
+        mediaHashes,
+        petRootTxid: typeof body.petRootTxid === 'string' ? body.petRootTxid : '',
+        author: installId,
+        createdAt: Number(body.createdAt),
+      });
+      if (!check.ok) {
+        json(res, 400, { error: check.error });
+        return;
+      }
+
+      const id = await computePostContentHash({
+        caption: check.value.caption,
+        mediaHashes: check.value.mediaHashes,
+        petRootTxid: check.value.petRootTxid,
+        author: installId,
+        createdAt: check.value.createdAt,
+      });
+      const provided = normalizeHex64(
+        typeof body.contentHash === 'string' ? body.contentHash : '',
+      );
+      if (provided && provided !== id) {
+        json(res, 400, { error: 'contentHash does not match hosted fields' });
+        return;
+      }
+      for (const sha of check.value.mediaHashes) {
+        if (!social.mediaExists(sha)) {
+          json(res, 400, { error: `media not uploaded: ${sha}` });
+          return;
+        }
+      }
+
+      const authorAddress =
+        typeof body.authorAddress === 'string' && body.authorAddress.trim()
+          ? body.authorAddress.trim().slice(0, 128)
+          : null;
+      const created = social.createPost({
+        id,
+        petRootTxid: check.value.petRootTxid,
+        authorInstall: installId,
+        authorAddress,
+        caption: check.value.caption,
+        createdAt: check.value.createdAt,
+        mediaHashes: check.value.mediaHashes,
+      });
+      if (!created.ok) {
+        json(res, 409, { error: 'post already exists' });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        id,
+        contentHash: id,
+        status: 'pending',
+        media: check.value.mediaHashes,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && /^\/api\/posts\/[0-9a-fA-F]{64}\/comments$/.test(normPath)) {
+      const postId = normPath.split('/')[3]!.toLowerCase();
+      if (!social.postExists(postId)) {
+        json(res, 404, { error: 'post not found' });
+        return;
+      }
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      commentsPerDay.consume(installId);
+      writesPerIpPerMin.consume(normalizeClientIp(clientIp(req)));
+      const check = normalizeComment(typeof body.body === 'string' ? body.body : '');
+      if (!check.ok) {
+        json(res, 400, { error: check.error });
+        return;
+      }
+      const comment = social.addComment({
+        id: randomUUID(),
+        postId,
+        authorInstall: installId,
+        authorAddress:
+          typeof body.authorAddress === 'string' && body.authorAddress.trim()
+            ? body.authorAddress.trim().slice(0, 128)
+            : null,
+        body: check.body,
+        createdAt: Date.now(),
+      });
+      json(res, 200, { ok: true, comment });
+      return;
+    }
+
+    if (req.method === 'POST' && /^\/api\/posts\/[0-9a-fA-F]{64}\/remove$/.test(normPath)) {
+      const postId = normPath.split('/')[3]!.toLowerCase();
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const removed = social.removePost(postId, installId);
+      json(res, removed ? 200 : 403, removed ? { ok: true } : { error: 'not the author' });
+      return;
+    }
+
+    if (req.method === 'POST' && /^\/api\/comments\/[0-9a-fA-F-]{36}\/remove$/.test(normPath)) {
+      const commentId = normPath.split('/')[3]!.toLowerCase();
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const removed = social.removeComment(commentId, installId);
+      json(res, removed ? 200 : 403, removed ? { ok: true } : { error: 'not the author' });
+      return;
+    }
+
+    // ------------------------------------------------------------- OG + notify
+
     if (req.method === 'GET' && (normPath.startsWith('/og/') || /^\/[0-9a-fA-F]{64}$/.test(normPath))) {
       const txid = normPath.replace(/^\/og\//, '').replace(/^\//, '').trim().toLowerCase();
       const item = store.get(txid);
@@ -171,8 +511,10 @@ const server = createServer(async (req, res) => {
         json(res, 400, { error: 'valid burnTxid required' });
         return;
       }
+      const voterInstall =
+        typeof body.installId === 'string' ? body.installId.trim() : null;
       if (TOKEN_ID) {
-        void ingestTxid(chronik, store, txid, TOKEN_ID);
+        void ingestTxid(chronik, store, social, txid, TOKEN_ID, { voterInstall });
       }
       json(res, 200, { ok: true });
       return;
@@ -181,7 +523,12 @@ const server = createServer(async (req, res) => {
     json(res, 404, { error: 'not found' });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const status = e instanceof PayloadTooLargeError ? 413 : 500;
+    const status =
+      e instanceof PayloadTooLargeError
+        ? 413
+        : e instanceof BadRequestError
+          ? 400
+          : 500;
     json(res, status, { error: msg });
   }
 });
@@ -189,9 +536,11 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Onest dana-index listening on :${PORT} startedAt=${STARTED_AT}`);
   if (TOKEN_ID && /^[0-9a-fA-F]{64}$/.test(TOKEN_ID)) {
-    void backfillRecent(chronik, store, TOKEN_ID).catch(console.warn);
+    void syncTokenHistory(chronik, TOKEN_ID, store, social)
+      .then(r => console.log('initial sync', r))
+      .catch(console.warn);
     setInterval(() => {
-      void ingestUnconfirmed(chronik, store, TOKEN_ID).catch(console.warn);
+      void syncTokenHistory(chronik, TOKEN_ID, store, social).catch(console.warn);
     }, POLL_MS);
   }
 });

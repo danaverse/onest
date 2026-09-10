@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789049330242,
+      "tag": "0000_redundant_polaris",
+      "breakpoints": true
+    }
+  ]
+}

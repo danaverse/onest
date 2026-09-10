@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from './i18n/LocaleContext.js';
 import { BrandMark } from './components/BrandMark.js';
 import { Header } from './components/Header.js';
 import { AnimalProfileModal } from './components/AnimalProfileModal.js';
 import { MemorialDetailModal } from './components/MemorialDetailModal.js';
+import { PostComposerModal, type PetOption } from './components/PostComposerModal.js';
+import { PostCard } from './components/PostCard.js';
+import { PostDetailModal } from './components/PostDetailModal.js';
 import {
   fetchRecentBurns,
   fetchTrendingProfiles,
@@ -11,7 +14,14 @@ import {
   type IndexBurn,
   type IndexMemorialGroup,
 } from './lib/danaIndexApi.js';
+import {
+  fetchFeed,
+  type FeedPage,
+  type FeedPost,
+} from './lib/socialApi.js';
 import { profileBareNameFromNote } from '../../../src/offering/animalProfileFields.js';
+
+const FEED_PAGE_SIZE = 12;
 
 export default function App() {
   const { t } = useLocale();
@@ -24,9 +34,17 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<IndexMemorialGroup[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [postsNext, setPostsNext] = useState<FeedPage['next']>(null);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [composer, setComposer] = useState<{ open: boolean; petTxid?: string }>({
+    open: false,
+  });
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeed();
+    loadPosts();
     checkUrlPath();
 
     const handlePopState = () => {
@@ -70,6 +88,19 @@ export default function App() {
     }
   }
 
+  async function loadPosts(cursor?: FeedPage['next']) {
+    try {
+      setFeedLoading(true);
+      const page = await fetchFeed(FEED_PAGE_SIZE, cursor);
+      setPosts(prev => (cursor ? [...prev, ...page.posts] : page.posts));
+      setPostsNext(page.next);
+    } catch {
+      if (!cursor) setPosts([]);
+    } finally {
+      setFeedLoading(false);
+    }
+  }
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!searchQuery.trim()) {
@@ -80,7 +111,39 @@ export default function App() {
     setSearchResults(results);
   }
 
-  const hasNoData = !loading && !searchResults && trending.length === 0 && recent.length === 0;
+  function handleVoted(updated: FeedPost) {
+    setPosts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+  }
+
+  function openComposer(petTxid?: string) {
+    setComposer({ open: true, petTxid });
+  }
+
+  const pets: PetOption[] = useMemo(() => {
+    const byRoot = new Map<string, string>();
+    for (const b of recent) {
+      const root = (b.originalBurnTxid || b.burnTxid).toLowerCase();
+      byRoot.set(root, profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`);
+    }
+    for (const g of trending) {
+      const root = g.originalBurnTxid.toLowerCase();
+      byRoot.set(
+        root,
+        profileBareNameFromNote(g.originalNote) || byRoot.get(root) || `Pet ${root.slice(0, 8)}…`,
+      );
+    }
+    return [...byRoot.entries()].map(([txid, name]) => ({ txid, name }));
+  }, [recent, trending]);
+
+  const petNameByRoot = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of pets) map.set(p.txid.toLowerCase(), p.name);
+    return map;
+  }, [pets]);
+
+  const hasNoData =
+    !loading && !searchResults && trending.length === 0 && recent.length === 0;
+  const detailPost = detailPostId ? posts.find(p => p.id === detailPostId) : undefined;
 
   return (
     <div className="onest-app">
@@ -108,6 +171,57 @@ export default function App() {
             <BrandMark width={20} height={20} />
             <span>{t('newProfile')}</span>
           </button>
+          <button
+            type="button"
+            className="btn-create-profile btn-share-moment"
+            onClick={() => openComposer()}
+          >
+            <span>📸</span>
+            <span>{t('shareMoment')}</span>
+          </button>
+        </section>
+
+        <section className="feed-section">
+          <div className="feed-head">
+            <h2>{t('moments')}</h2>
+          </div>
+
+          {feedLoading && posts.length === 0 && (
+            <div className="feed-loading">
+              <span className="paw-spinner">🐾</span>
+            </div>
+          )}
+
+          {!feedLoading && posts.length === 0 && (
+            <p className="empty-hint">{t('noMomentsYet')}</p>
+          )}
+
+          {posts.length > 0 && (
+            <div className="post-grid">
+              {posts.map(p => (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  petName={petNameByRoot.get(p.petRootTxid.toLowerCase())}
+                  onOpen={() => setDetailPostId(p.id)}
+                  onVoted={handleVoted}
+                />
+              ))}
+            </div>
+          )}
+
+          {postsNext && (
+            <div className="feed-more">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={feedLoading}
+                onClick={() => loadPosts(postsNext)}
+              >
+                {t('loadMore')}
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="search-section">
@@ -276,6 +390,26 @@ export default function App() {
           setSelectedParentTxid(rootTxid);
           setModalOpen(true);
         }}
+        onLeavePost={rootTxid => openComposer(rootTxid)}
+      />
+
+      <PostComposerModal
+        key={`composer-${composer.petTxid ?? 'none'}-${String(composer.open)}`}
+        open={composer.open}
+        pets={pets}
+        initialPetTxid={composer.petTxid}
+        onClose={() => setComposer({ open: false })}
+        onSuccess={() => loadPosts()}
+      />
+
+      <PostDetailModal
+        open={Boolean(detailPostId)}
+        postId={detailPostId}
+        petName={
+          detailPost ? petNameByRoot.get(detailPost.petRootTxid.toLowerCase()) : undefined
+        }
+        onClose={() => setDetailPostId(null)}
+        onChanged={() => loadPosts()}
       />
     </div>
   );

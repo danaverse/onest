@@ -23,6 +23,7 @@ import {
   publicStatus,
   remainingOffersToday,
   requireMintDesk,
+  WaitNotElapsedError,
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
 import {
@@ -157,8 +158,13 @@ const server = createServer(async (req, res) => {
       const challenge = await enqueueChallenge({
         installId,
         clientIp: clientIp(req),
+        kind: typeof body.kind === 'string' ? body.kind : undefined,
         note,
         parentBurnTxid,
+        contentHash: typeof body.contentHash === 'string' ? body.contentHash : undefined,
+        postHash: typeof body.postHash === 'string' ? body.postHash : undefined,
+        direction: body.direction,
+        targetType: body.targetType,
       });
       json(res, 200, challenge);
       return;
@@ -212,6 +218,10 @@ const server = createServer(async (req, res) => {
     json(res, 404, { error: 'not found' });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (e instanceof WaitNotElapsedError) {
+      json(res, 425, { error: msg, retryAfterMs: e.retryAfterMs });
+      return;
+    }
     const status = e instanceof PayloadTooLargeError ? 413 : 400;
     json(res, status, { error: msg });
   }
