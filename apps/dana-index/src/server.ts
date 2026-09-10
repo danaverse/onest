@@ -25,6 +25,7 @@
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 import {
   createIngestChronik,
@@ -57,11 +58,33 @@ import {
 loadEnv({ path: resolve(process.cwd(), '.env') });
 loadEnv({ path: process.env.ONEST_DANA_INDEX_ENV ?? '/etc/onest/dana-index.env', override: true });
 
+function resolveTokenId(): string {
+  const envId =
+    process.env.TOKEN_ID?.trim() ||
+    process.env.VITE_PAW_TOKEN_ID?.trim() ||
+    process.env.VITE_PRAYER_TOKEN_ID?.trim();
+  if (envId) return envId;
+  const depPaths = [
+    process.env.DEPLOYMENT_JSON?.trim(),
+    'deployments/mainnet-paw.json',
+    'deployments/test-paw.json',
+  ].filter(Boolean) as string[];
+  for (const p of depPaths) {
+    const full = resolve(process.cwd(), p);
+    if (existsSync(full)) {
+      try {
+        const dep = JSON.parse(readFileSync(full, 'utf8'));
+        if (dep.tokenId) return dep.tokenId;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return '';
+}
+
 const PORT = Number(process.env.DANA_INDEX_PORT?.trim() || 8788);
-const TOKEN_ID =
-  process.env.TOKEN_ID?.trim() ||
-  process.env.VITE_PRAYER_TOKEN_ID?.trim() ||
-  '';
+const TOKEN_ID = resolveTokenId();
 const STORE_PATH =
   process.env.DANA_INDEX_STORE?.trim() ||
   resolve(process.cwd(), 'data/dana-index-burns.json');
