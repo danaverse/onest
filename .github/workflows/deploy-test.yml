@@ -115,14 +115,21 @@ jobs:
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
             cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
 
-          echo "Syncing soft-wait config into /etc/onest/mint.env..."
+          echo "Syncing soft-wait config into environment..."
           SOFT_WAIT="${{ vars.MINT_MIN_PRAY_SECONDS || '54' }}"
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo mkdir -p /etc/onest; \
-            sudo touch /etc/onest/mint.env; \
-            sudo sed -i '/^MINT_MIN_PRAY_SECONDS=/d' /etc/onest/mint.env; \
-            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' | sudo tee -a /etc/onest/mint.env > /dev/null; \
-            sudo chmod 600 /etc/onest/mint.env"
+            touch '${REPO_DEST}/.env' 2>/dev/null || true; \
+            sed -i '/^MINT_MIN_PRAY_SECONDS=/d' '${REPO_DEST}/.env' 2>/dev/null || true; \
+            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' >> '${REPO_DEST}/.env' 2>/dev/null || true; \
+            mkdir -p '${REPO_DEST}/apps/mint-api' 2>/dev/null || true; \
+            touch '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
+            sed -i '/^MINT_MIN_PRAY_SECONDS=/d' '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
+            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' >> '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
+            (sudo mkdir -p /etc/onest && \
+             sudo touch /etc/onest/mint.env && \
+             sudo sed -i '/^MINT_MIN_PRAY_SECONDS=/d' /etc/onest/mint.env && \
+             echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' | sudo tee -a /etc/onest/mint.env > /dev/null && \
+             sudo chmod 600 /etc/onest/mint.env) 2>/dev/null || true"
 
           echo "Restarting services (social DB migrations run at dana-index startup)..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
