@@ -10,7 +10,7 @@ Related: [README](../README.md) · [dana-index](../apps/dana-index/README.md) ·
 
 | Layer | Role | Source of truth |
 |-------|------|-----------------|
-| **Chain** | Stamps, paw burns, **weighted** vote burns (N PAW), post-content hashes | Chronik / ALP + DANA (or ONEST) `OP_RETURN` |
+| **Chain** | Stamps, paw burns, **weighted** vote burns (N PAW), post-content hashes | Chronik / ALP + DANA `OP_RETURN` |
 | **Hosted index** | Feed, captions, comments, vote tallies, search | SQLite (new). Burns stay on the JSON cache until it hurts |
 | **Object storage** | Photos and video bytes | Cloudflare R2 (or S3-compatible) + optional Cloudflare Images |
 | **PWA** | Profiles, stamp a paw, later Instagram-like feed | `apps/web` (Vite + React) |
@@ -30,7 +30,8 @@ apps/web  →  /api        →  mint-api   (PoW challenge, remint, DANA burn)
 
 - **`WLotusCovenant`**: mint 108 PAW to miner/desk, no temple tax, same genesis clock as WLotus (1:1 issuance convention).
 - **Sponsored path**: desk pays network fees; client mines PoW; desk burns 1 PAW for the memory / paw print.
-- **`BurnStore`**: durable JSON (`data/dana-index-burns.json`). Reconstructible from Chronik. Correct for burns-only.
+- **`BurnStore`**: durable JSON (`data/dana-index-burns.json`). Reconstructible from Chronik via the dual-cursor sync. Correct for burns-only.
+- **Social store**: `dana-index` also owns `data/onest-social.sqlite` (posts, media, votes, comments) + `data/media` — see the tech stack below.
 - **Other JSON**: push subscriptions, VAPID keys, root creators. Operational; do not fold into a social schema on day one.
 
 `BurnStore.save()` rewrites the whole file on each insert. `groups()` / `trending()` / `search()` scan every burn. That is fine at hundreds of memories. It is the wrong host for posts, comments, media, and votes.
@@ -80,10 +81,10 @@ Lixi (`bcProFoundation/lixi`) uploads via Cloudflare Images, records `sha256(buf
 
 **Create a post**
 
-1. Client compresses photos (target a few hundred KB WebP/JPEG). Video stays a short clip with a poster frame.
+1. Client compresses photos (target a few hundred KB WebP/JPEG). Images-only at MVP; short video with a poster frame later.
 2. API returns a presigned PUT. Object key is `sha256(file)`.
 3. Client (or desk) computes `contentHash = sha256(caption + mediaHashes + petRootTxid + author + createdAt)`.
-4. Stamp `contentHash` in an `OP_RETURN` (DANA / ONEST lokad) after the same remint/burn or XEC-fee path used for paw prints.
+4. Stamp `contentHash` in the DANA `OP_RETURN` of the **PAW burn tx** itself — every stamp burns PAW; XEC covers network fees only. Ingest stays on `tokenId(TOKEN_ID).history()`; no lokad-wide scan.
 5. Indexer inserts the post only when `hash(hosted row) == on-chain payload` (or marks it unverified until the stamp confirms).
 
 **Suggested tables** (Drizzle, not Lixi polymorphism):
@@ -92,7 +93,8 @@ Lixi (`bcProFoundation/lixi`) uploads via Cloudflare Images, records `sha256(buf
 posts
   id              text pk          -- contentHash
   pet_root_txid   text not null
-  author_install  text             -- later: address
+  author_install  text             -- MVP author (sponsored path, no wallet)
+  author_address  text             -- when a wallet is used; takes precedence
   caption         text
   content_hash    text unique
   anchor_txid     text unique      -- null until confirmed
@@ -114,7 +116,8 @@ votes                              -- from Chronik, not a trusted POST /vote
   post_id         text → posts
   direction       integer          -- 1 up / 0 down
   atoms           integer          -- N PAW burned in this tx (N ≥ 1)
-  burned_by       text
+  burned_by       text             -- on-chain sender address (desk on sponsored path)
+  voter_install   text             -- UX only; never tallies
   block_height    integer
   -- no unique (burned_by, post_id): later burns add weight
 
@@ -131,13 +134,15 @@ Feed score: `upvote_atoms - downvote_atoms` (atom-weighted), plus existing gravi
 Lixi lets the voter pick a burn size (`1, 8, 50, 100, …` XPI) with `BurnType.Up = 1`, `BurnType.Down = 0`, `BurnForType.Post = 0x5f02`. Onest does the same with **PAW atoms**, not a single-token click.
 
 ```
-OP_RETURN  DANA|ONES  BURN  direction  targetType  postHash  voter
-                         1=up / 0=down   0x5f02
+OP_RETURN  DANA | v3 | direction | targetType | postHash
+                      1=up / 0=down   0x5f02    32-byte content hash
 
 ALP burn output: N PAW atoms   ← this is the vote weight
 ```
 
-- **Weight = atoms burned in that tx.** Minimum **1**. No protocol maximum; UX can offer presets (e.g. 1, 8, 54, 108) plus a custom amount, and optionally cap a single tx (e.g. one mala = 108) so a mis-tap cannot empty a wallet.
+No `voter` field: the sender address comes from the tx inputs (desk on the sponsored path). Memorials stay v1/v2; post stamps are v4.
+
+- **Weight = atoms burned in that tx.** Minimum **1**. **MVP is a single +1 vote**; amount presets (e.g. 1, 8, 54, 108) plus an optional per-tx cap (e.g. one mala = 108) ship after launch so a mis-tap cannot empty a wallet.
 - Direction lives in `OP_RETURN`. Amount lives in the ALP burn, not in a hosted “likes++” field.
 - Same voter may burn again on the same post. Later txs **add** atoms (another +8 up, or a down that offsets). Do **not** use `unique (burned_by, post_id)`.
 - Net for a post: `score = sum(up atoms) - sum(down atoms)`. Optional later: show that voter’s own net (`their up − their down`).
@@ -151,7 +156,7 @@ ALP burn output: N PAW atoms   ← this is the vote weight
 | User wallet | PAW the user already holds | Any N they sign |
 | Sponsored desk | Desk inventory after remint | **Default 1.** Larger N on the sponsored path drains the desk — require user-held PAW (or user XEC + remint they keep) for N > 1 |
 
-Sponsored *network fees* and sponsored *token inventory* are different. A casual stamp can still burn 1 PAW from the desk. Weighted votes should spend **the voter’s PAW**, or the desk will be farmed for score.
+Sponsored *network fees* and sponsored *token inventory* are different. A casual stamp can still burn 1 PAW from the desk. MVP votes are +1 on the sponsored path (bounded by PoW, the soft wait, and daily caps); when farming becomes indefensible, switch votes to **wallet-only** (weighted) so the voter’s own PAW pays.
 
 Reuse `trendingScore.ts` (HN-style gravity 1.5) so memories and posts share one ranking idea. Gravity still applies to *when* atoms arrived; weight is the atom count, not the number of click events.
 
@@ -159,7 +164,7 @@ Reuse `trendingScore.ts` (HN-style gravity 1.5) so memories and posts share one 
 
 ## Stamp paths and anti-farming
 
-WLotus’s soft wait is **108 seconds** after remint, before the memorial burn (`minPraySeconds`; cancel skips the burn). A ~54–60s floor is in the same family. Soft wait **must not delay remint** (tip race).
+Soft wait ("min pray") is **enforced server-side in `mint-api`** — the WLotus client-side floor alone is too weak. The desk records `waitUntil = challenge.createdAt + MINT_MIN_PRAY_SECONDS` when the remint submits; `/api/burn` rejects early calls (`425 Too Early` + `retryAfterMs`) and never builds the burn before the floor. Config via `MINT_MIN_PRAY_SECONDS` (default **54**, clamp 0–600, `0` disables), set per environment from a GitHub Actions variable into `/etc/onest/mint.env` on deploy. The PWA ports the WLotus countdown (`minPraySeconds.ts`) for UX only — not trusted; PoW time still counts toward the floor because the clock starts at challenge issue. Remint submits immediately on a nonce; cancel abandons the pending burn and the desk keeps the atom (tip race). Pending burns are in-memory today — persist the pending record (with `waitUntil`) so a desk restart mid-wait does not strand the user's remint.
 
 **Is a 54s / 108s pad enough to stop farming?** No, not by itself. Headless browsers spoof mobile headers. The pad is an attention tax, not a Sybil proof. It is enough only when **there is nothing extractable**: sponsored stamps create a memory record, not liquid value the farmer can sell.
 
@@ -167,7 +172,7 @@ WLotus’s soft wait is **108 seconds** after remint, before the memorial burn (
 
 | Tier | Who | Identity | Cost | Latency |
 |------|-----|----------|------|---------|
-| **1. Casual mobile PWA** | Installed or mobile browser | `installId` + device PoW | Desk-sponsored fees, rate-limited | Soft wait ~60–108s after remint |
+| **1. Casual mobile PWA** | Installed or mobile browser | `installId` + device PoW | Desk-sponsored fees, rate-limited | Soft wait floor (54s), server-enforced |
 | **2. Fast path** | Same PWA, funded wallet | Address + XEC for fuel | User pays ~network fee | Stamp immediately, no soft wait |
 | **3. Desktop web** | Browser | Wallet (CashTab / local seed) | **User XEC required** | Immediate. Desk does not sponsor |
 
@@ -248,18 +253,21 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 - Chronik, `ecash-lib` / `ecash-wallet`, `WLotusCovenant`
 - JSON files for burns, push, root creators
 - Client PoW in a web worker
+- SQLite + Drizzle + `better-sqlite3` social store (`posts`, `media`, `post_media`, `votes`, `comments`, `ingest_state`; WAL + FTS5; migrations run at startup)
+- Hash-keyed media store on local disk behind an R2-ready interface (raw PUT, sha256 key)
+- DANA v3 vote / v4 post-stamp payloads + classifier; dual-cursor Chronik ingest
+- Server-enforced soft wait (`MINT_MIN_PRAY_SECONDS`, default 54)
+- Canvas client-side image compression; atom-weighted trending
 
-### Add when social lands
+### Still to add
 
 | Piece | Choice |
 |-------|--------|
-| Social DB | SQLite + Drizzle + `better-sqlite3`, WAL, FTS5 |
-| Object store | Cloudflare R2 (zero egress) or S3-compatible; presigned PUT |
+| Object store | Cloudflare R2 (zero egress) or S3-compatible; presigned PUT reusing the sha256 key |
 | Image variants | Cloudflare Images later (resize / WebP), not required for beta |
-| Client compress | `browser-image-compression` (or equivalent) before upload |
 | Bot check | Turnstile on sponsored challenge |
-| Wallet (fast / desktop) | Existing desk path + optional CashTab / local seed for user-paid fees |
-| Ranking | `src/lib/trendingScore.ts` |
+| Wallet (fast / desktop) | CashTab / local seed for user-paid fees; wallet-only weighted votes when farming becomes indefensible |
+| Backups | `sqlite3 .backup` timer for the social DB; R2 lifecycle for orphaned objects |
 
 No Nest, no Prisma, no Redis, no second language. One monorepo, two Node services, one PWA.
 
@@ -268,25 +276,29 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 ## Phased work
 
 1. **This document** — shared plan.
-2. **Social store** — Drizzle schema (`posts`, `media`, `votes`); leave `BurnStore` on JSON.
-3. **Upload** — presigned R2 (local disk acceptable on the test VM); hash-keyed objects.
-4. **Post stamp** — `OP_RETURN` content hash; indexer verifies before “verified.”
-5. **Feed UI** — card layout on the PWA (caption, images, later video).
-6. **Votes** — N PAW burn up/down (weight = atoms); Chronik ingest; unique on `txid` only; stack burns per voter.
-7. **Stamp tiers** — detect PWA/mobile for UX only; desktop requires user XEC; optional instant-with-XEC on mobile; Turnstile on `/api/challenge`.
-8. **Comments** — hosted first; optional hash stamp later.
+2. **Social store** — shipped: `dana-index` owns SQLite + Drizzle (`posts`, `post_media`, `media`, `votes`, `comments`, `ingest_state`); dual-cursor Chronik sync replaces the page-0-only backfill; `BurnStore` stays on JSON.
+3. **Upload** — shipped: raw sha256-keyed PUT to local disk (`ONEST_MEDIA_DIR`) behind an R2-ready interface.
+4. **Post stamp** — shipped: PAW burn tx carries the DANA **v4** content hash; indexer verifies the hosted row before “verified.”
+5. **Feed UI** — shipped: Moments feed on the PWA (caption + images; video later).
+6. **Votes** — shipped: +1 PAW sponsored burn, DANA **v3** payload; weight = atoms; Chronik ingest; unique on `txid` only; stack burns per voter.
+7. **Stamp tiers** — sponsored path only for now; PWA/mobile detection, user-paid XEC and Turnstile still to add.
+8. **Comments** — shipped: hosted (author soft-delete); optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
 10. **Postgres** — only after a second writer or a real ops need.
 
 ---
 
-## Open choices (do not block phase 2–4)
+## Decisions (resolved)
 
-- Lokad id for post stamps: keep `DANA` vs add `ONES`.
-- Soft wait default: 60s vs WLotus 108s (build-time / env, clamp 0–600).
-- Author identity: `installId` until wallets are common, then address.
-- Video: duration / size cap, and whether beta is images-only.
-- Vote UX presets and optional per-tx atom cap (suggested 108). Stacked burns are decided: **sum atoms, no one-vote-per-identity lock.**
-- Whether a sponsored path may ever burn N > 1 for a vote (default **no**).
+- **Lokad:** keep `DANA` for post stamps; do not add `ONES`.
+- **Wire format:** `DANA` versions — v1/v2 memorial, **v3** vote (`direction`, `targetType`, `postHash`; sender read from the tx), **v4** post stamp (`contentHash`).
+- **Stamp discovery:** every stamp (post or vote) rides a **PAW burn tx**; XEC is only the fee. Ingest stays on the PAW token history — no lokad-wide scan.
+- **Social DB owner:** `dana-index` is the single writer (hosted rows + chain-derived rows); `mint-api` stays on PoW/burn and calls it internally.
+- **Soft wait:** **server-enforced in `mint-api`** (deliberately stronger than WLotus's client-only floor). `MINT_MIN_PRAY_SECONDS` default **54s**, clamp 0–600, GitHub Actions variable → `/etc/onest/mint.env`; submit returns `waitUntil`; `/api/burn` rejects early with `425` + `retryAfterMs`. Client ports the WLotus countdown for UX only; never delays remint.
+- **Identity:** progressive. `installId` authors posts/comments on the sponsored path (no wallet needed); `author_address` is captured when a wallet is used and takes precedence. Votes are identified by on-chain sender address; `voter_install` is UX-only and never tallies. Bind `installId ↔ address` when wallets land.
+- **Video:** out of MVP; images-only at launch, short clips with poster frame later.
+- **Vote UX:** MVP is a single **+1** PAW vote; amount presets and an optional per-tx cap (suggested 108) come after launch. Stacked burns stand: **sum atoms, no one-vote-per-identity lock.**
+- **Sponsored vote path:** MVP +1 sponsored allowed (PoW + soft wait + daily caps as the farming bound); N > 1 stays **no**. Migrate to **wallet-only** weighted votes when farming becomes indefensible.
+- **Comments:** phase 2 (hosted), same identity rules as posts.
 
-When those are decided, update this file rather than scattering notes in PR descriptions.
+Change a decision here rather than scattering notes in PR descriptions.

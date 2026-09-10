@@ -32,6 +32,7 @@ export function MemorialDetailModal(props: {
   txid: string | null;
   onClose: () => void;
   onLeaveTribute: (rootTxid: string) => void;
+  onLeavePost?: (rootTxid: string, petName: string) => void;
 }) {
   const { t } = useLocale();
   const [memorial, setMemorial] = useState<IndexMemorialGroup | null>(null);
@@ -127,6 +128,13 @@ export function MemorialDetailModal(props: {
                 onClick={() => props.onLeaveTribute(memorial.originalBurnTxid)}
               >
                 🐾 {t('pawTribute')}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-action-share"
+                onClick={() => props.onLeavePost?.(memorial.originalBurnTxid, name)}
+              >
+                📸 {t('shareMoment')}
               </button>
               <button type="button" className="btn-secondary btn-action-share" onClick={handleShare}>
                 {copied ? '✓ Link Copied!' : 'Share Profile'}
