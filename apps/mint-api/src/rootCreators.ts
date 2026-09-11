@@ -76,6 +76,15 @@ export function rootCreatorMatch(rootBurnTxid: string): string | null {
   return loadStore().roots[txid]?.installId ?? null;
 }
 
+/** All remembered root creators (for startup re-attribution). */
+export function listRootCreators(): Array<{ txid: string; installId: string }> {
+  const store = loadStore();
+  return Object.entries(store.roots).map(([txid, entry]) => ({
+    txid,
+    installId: entry.installId,
+  }));
+}
+
 export function checkRootCreator(opts: {
   rootBurnTxid: string;
   installId: string;

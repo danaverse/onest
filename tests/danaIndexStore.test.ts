@@ -146,4 +146,54 @@ describe('BurnStore', () => {
     expect(store.petsForSender('ecash:qqnobody')).toHaveLength(0);
     expect(store.petsForSender('')).toHaveLength(0);
   });
+
+  it('attributes desk-paid profiles to the creator and can backfill', () => {
+    const store = new BurnStore(testStorePath);
+    const rootTxid = '6'.repeat(64);
+    const note = encodeAnimalProfileNote({
+      species: 'cat',
+      name: 'Luna',
+      note: '',
+      breed: '',
+      birthDate: '',
+      passingDate: '',
+      location: '',
+      memorialPlace: '',
+      relationshipType: '',
+      relatedTxid: '',
+      relationships: [],
+      kind: 'memorial',
+      dateCalendar: 'solar',
+    });
+    store.insert({
+      burnTxid: rootTxid,
+      tokenId: 't'.repeat(64),
+      note,
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: rootTxid,
+      blockHeight: 9,
+      blockTimestamp: 1700000009,
+      timeFirstSeen: new Date().toISOString(),
+      senderAddress: 'ecash:qqdesk',
+    });
+
+    /* Desk-sent burn: not visible to the creator yet. */
+    expect(store.petsForSender('ecash:qqcreator')).toHaveLength(0);
+
+    /* Backfill from the notify (installId + verified payer address). */
+    expect(
+      store.update(rootTxid, {
+        creatorInstallId: 'install-luna',
+        creatorAddress: 'ecash:qqcreator',
+      }),
+    ).not.toBeNull();
+
+    expect(store.petsForSender('ECASH:QQCREATOR').map(g => g.originalBurnTxid)).toEqual([
+      rootTxid,
+    ]);
+    expect(store.petsForSender('', 'install-luna')).toHaveLength(1);
+    expect(store.petsForSender('', 'install-other')).toHaveLength(0);
+    expect(store.update('ff'.repeat(64), { creatorAddress: 'x' })).toBeNull();
+  });
 });

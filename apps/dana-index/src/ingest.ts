@@ -99,7 +99,11 @@ export function routeTx(
   tokenId: string,
   burnStore: BurnStore,
   social: SocialStore,
-  opts?: { voterInstall?: string | null },
+  opts?: {
+    voterInstall?: string | null;
+    creatorInstallId?: string | null;
+    creatorAddress?: string | null;
+  },
 ): IngestTotals {
   const totals = emptyTotals();
   const push = danaFromTx(tx);
@@ -112,6 +116,8 @@ export function routeTx(
     social,
     burnedBy: senderAddressFromTx(tx),
     voterInstall: opts?.voterInstall ?? null,
+    creatorInstallId: opts?.creatorInstallId ?? null,
+    creatorAddress: opts?.creatorAddress ?? null,
   });
   addRoute(totals, r);
   return totals;
@@ -123,7 +129,11 @@ export async function ingestTxid(
   social: SocialStore,
   txid: string,
   tokenId: string,
-  opts?: { voterInstall?: string | null },
+  opts?: {
+    voterInstall?: string | null;
+    creatorInstallId?: string | null;
+    creatorAddress?: string | null;
+  },
 ): Promise<IngestTotals> {
   const id = txid.trim().toLowerCase();
   try {

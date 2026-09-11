@@ -29,6 +29,12 @@ export interface IndexedBurn {
   burnAtoms?: string;
   /** On-chain sender of the burn tx (lowercased); used for "my pets". */
   senderAddress?: string;
+  /**
+   * Desk-paid actions burn from the desk wallet, so the true creator is
+   * attributed from the verified payment/notify instead of the tx sender.
+   */
+  creatorInstallId?: string;
+  creatorAddress?: string;
 }
 
 export interface MemorialGroup {
@@ -169,16 +175,38 @@ export class BurnStore {
     return out;
   }
 
-  /** Pet profiles whose root burn was sent by `address` (wallet-paid). */
-  petsForSender(address: string): MemorialGroup[] {
+  /**
+   * Pet profiles created by this wallet: matches the attributed creator
+   * (desk-paid profiles) or the on-chain sender (wallet-paid profiles).
+   * `installId` additionally matches creators whose wallet is not yet bound.
+   */
+  petsForSender(address: string, installId?: string): MemorialGroup[] {
     const want = address.trim().toLowerCase();
-    if (!want) return [];
+    const wantInstall = String(installId || '').trim();
+    if (!want && !wantInstall) return [];
     return this.groups().filter(g => {
       const root = g.burns.find(
         b => b.burnTxid.toLowerCase() === g.originalBurnTxid.toLowerCase(),
       );
-      return root?.senderAddress?.toLowerCase() === want;
+      if (!root) return false;
+      if (want && root.creatorAddress?.toLowerCase() === want) return true;
+      if (want && root.senderAddress?.toLowerCase() === want) return true;
+      if (wantInstall && root.creatorInstallId === wantInstall) return true;
+      return false;
     });
+  }
+
+  /** Update an indexed burn in place (creator attribution backfill). */
+  update(
+    burnTxid: string,
+    patch: Partial<IndexedBurn>,
+  ): IndexedBurn | null {
+    const id = burnTxid.trim().toLowerCase();
+    const burn = this.byTxid.get(id);
+    if (!burn) return null;
+    Object.assign(burn, patch);
+    this.save();
+    return burn;
   }
 
   groupForRoot(txid: string): MemorialGroup | null {

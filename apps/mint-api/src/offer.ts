@@ -330,7 +330,11 @@ export function requireMintDesk(): void {
   if (dep.tokenId) assertDeskTokenId(dep.tokenId);
 }
 
-export function notifyDanaIndex(burnTxid: string, installId?: string): void {
+export function notifyDanaIndex(
+  burnTxid: string,
+  installId?: string,
+  creatorAddress?: string,
+): void {
   const base = process.env.DANA_INDEX_URL?.trim();
   if (!base) return;
   const url = `${base.replace(/\/$/, '')}/api/notify`;
@@ -340,7 +344,7 @@ export function notifyDanaIndex(burnTxid: string, installId?: string): void {
   void fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ burnTxid, installId }),
+    body: JSON.stringify({ burnTxid, installId, creatorAddress }),
   }).catch(err => {
     console.warn('dana-index notify failed', err);
   });

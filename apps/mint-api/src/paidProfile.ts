@@ -42,7 +42,7 @@ export async function createPaidProfile(input: {
         parentBurnTxid: input.parentBurnTxid,
         burnAtoms: 1n,
       });
-      notifyDanaIndex(burn.txid, input.installId);
+      notifyDanaIndex(burn.txid, input.installId, input.address);
       rememberRootCreator(input.parentBurnTxid || burn.txid, input.installId);
       return {
         ok: true as const,
