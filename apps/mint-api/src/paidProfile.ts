@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Address, toHex } from 'ecash-lib';
-import type { Tx } from 'chronik-client';
+import type { ChronikClient, Tx } from 'chronik-client';
 import { createChronik } from '../../../src/network/createChronik.js';
 import { loadTipFeeWallet } from '../../../src/mint/loadTipFeeWallet.js';
 import { parseServingTipIndex } from '../../../src/mint/servingTips.js';
@@ -50,6 +50,7 @@ function saveUsed(txids: string[]): void {
 }
 
 const usedPayments = new Set(loadUsed());
+const inFlight = new Set<string>();
 
 function markUsed(txid: string): void {
   usedPayments.add(txid);
@@ -59,6 +60,37 @@ function markUsed(txid: string): void {
 function unmarkUsed(txid: string): void {
   usedPayments.delete(txid);
   saveUsed([...usedPayments]);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * A freshly broadcast payment may not be in the desk Chronik node yet.
+ * Retry briefly before giving up so the user doesn't have to re-pay.
+ */
+async function fetchTxWithRetry(
+  chronik: ChronikClient,
+  txid: string,
+  attempts = 10,
+  delayMs = 2_000,
+): Promise<Tx> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await chronik.tx(txid);
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/404|not found/i.test(msg)) throw e;
+      if (i < attempts - 1) await sleep(delayMs);
+    }
+  }
+  throw new Error(
+    `Payment transaction is still propagating (${lastErr instanceof Error ? lastErr.message : 'not found'}). ` +
+      'Tap the pay button again to retry — your previous payment will be reused, no extra payment is made.',
+  );
 }
 
 /** First P2PKH input address (the paying wallet). */
@@ -116,46 +148,54 @@ export async function createPaidProfile(input: {
   if (usedPayments.has(paymentTxid)) {
     throw new Error('Payment has already been used');
   }
-
-  const chronik = await createChronik();
-  const tx = await chronik.tx(paymentTxid);
-  const tipWallet = await loadTipFeeWallet(chronik, parseServingTipIndex());
-
-  const feeSats = xecToSats(FEE_XEC);
-  const paid = sumOutputsToScript(
-    (tx.outputs ?? []) as Array<{ sats: bigint; outputScript: string }>,
-    toHex(tipWallet.wallet.script.bytecode),
-  );
-  if (paid < feeSats) {
-    throw new Error(`Payment too small (${paid} / ${feeSats} sats)`);
+  if (inFlight.has(paymentTxid)) {
+    throw new Error('Payment is already being processed');
   }
+  inFlight.add(paymentTxid);
 
-  const sender = senderAddressFromTx(tx);
-  if (!sender || sender !== input.address.trim().toLowerCase()) {
-    throw new Error('Payment must come from the wallet creating the profile');
-  }
-
-  markUsed(paymentTxid);
   try {
-    const note = prepareDanaNote(input.note, Boolean(input.parentBurnTxid));
-    const burn = await burnOnePaw({
-      wallet: tipWallet.wallet,
-      tokenId: dep.tokenId,
-      note,
-      parentBurnTxid: input.parentBurnTxid,
-      burnAtoms: 1n,
-    });
-    notifyDanaIndex(burn.txid, input.installId);
-    rememberRootCreator(input.parentBurnTxid || burn.txid, input.installId);
-    return {
-      ok: true,
-      burnTxid: burn.txid,
-      note,
-      explorerBurn: explorerTx(burn.txid),
-      xec: FEE_XEC.toString(),
-    };
-  } catch (e) {
-    unmarkUsed(paymentTxid);
-    throw e;
+    const chronik = await createChronik();
+    const tx = await fetchTxWithRetry(chronik, paymentTxid);
+    const tipWallet = await loadTipFeeWallet(chronik, parseServingTipIndex());
+
+    const feeSats = xecToSats(FEE_XEC);
+    const paid = sumOutputsToScript(
+      (tx.outputs ?? []) as Array<{ sats: bigint; outputScript: string }>,
+      toHex(tipWallet.wallet.script.bytecode),
+    );
+    if (paid < feeSats) {
+      throw new Error(`Payment too small (${paid} / ${feeSats} sats)`);
+    }
+
+    const sender = senderAddressFromTx(tx);
+    if (!sender || sender !== input.address.trim().toLowerCase()) {
+      throw new Error('Payment must come from the wallet creating the profile');
+    }
+
+    markUsed(paymentTxid);
+    try {
+      const note = prepareDanaNote(input.note, Boolean(input.parentBurnTxid));
+      const burn = await burnOnePaw({
+        wallet: tipWallet.wallet,
+        tokenId: dep.tokenId,
+        note,
+        parentBurnTxid: input.parentBurnTxid,
+        burnAtoms: 1n,
+      });
+      notifyDanaIndex(burn.txid, input.installId);
+      rememberRootCreator(input.parentBurnTxid || burn.txid, input.installId);
+      return {
+        ok: true,
+        burnTxid: burn.txid,
+        note,
+        explorerBurn: explorerTx(burn.txid),
+        xec: FEE_XEC.toString(),
+      };
+    } catch (e) {
+      unmarkUsed(paymentTxid);
+      throw e;
+    }
+  } finally {
+    inFlight.delete(paymentTxid);
   }
 }
