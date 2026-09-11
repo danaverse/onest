@@ -1,6 +1,6 @@
 /**
- * User-paid pet profile creation: the wallet burns 1 PAW, pays the desk's
- * listing fee in PAW and covers XEC network fees. No soft wait.
+ * User-paid pet profile creation: the wallet burns 6 PAW (rebirth), pays the
+ * desk's 6-atom listing fee in PAW and covers XEC network fees. No soft wait.
  */
 import type { Wallet } from 'ecash-wallet';
 import {
@@ -55,7 +55,7 @@ export async function createPetProfileWithWallet(opts: {
     tokenId,
     note,
     creatorHash160: toHex(shaRmd160(opts.wallet.pk)),
-    burnAtoms: 1n,
+    burnAtoms: 6n,
     feeAtoms: fee.atoms,
     feeAddress: fee.feeAddress,
     autoSelectUtxos: true,

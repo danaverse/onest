@@ -1,6 +1,7 @@
 /**
  * Flat-fee paid pet profiles: the user pays XEC on-chain and the desk spends
- * 7 PAW from inventory (1 burned + 6 listing retained). No remint, no PoW.
+ * 12 PAW from inventory (6 burned for rebirth + 6 listing retained). No
+ * remint, no PoW.
  */
 import { Address } from 'ecash-lib';
 import { prepareDanaNote } from '../../../src/offering/animalProfileFields.js';
@@ -9,8 +10,8 @@ import { consumePaidAction, paidActionFeeInfo } from './paidAction.js';
 import { notifyDanaIndex } from './offer.js';
 import { rememberRootCreator } from './rootCreators.js';
 
-/** 1 atom burned + 6 atoms listing fee retained per paid profile. */
-const MIN_DESK_PAW_PER_PROFILE = 7n;
+/** 6 atoms burned (rebirth) + 6 atoms listing fee retained per paid profile. */
+const MIN_DESK_PAW_PER_PROFILE = 12n;
 
 export const profileFeeInfo = paidActionFeeInfo;
 
@@ -45,7 +46,7 @@ export async function createPaidProfile(input: {
         note,
         parentBurnTxid: input.parentBurnTxid,
         creatorHash160,
-        burnAtoms: 1n,
+        burnAtoms: 6n,
       });
       notifyDanaIndex(burn.txid, input.installId, input.address);
       rememberRootCreator(input.parentBurnTxid || burn.txid, input.installId);

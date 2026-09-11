@@ -15,7 +15,11 @@ import type { DanaPush } from '../../../src/social/danaClassify.js';
 import type { BurnStore } from './store.js';
 import type { SocialStore } from './social/socialStore.js';
 import { INGEST_CURSOR_KEY } from './social/socialStore.js';
-import { routeDanaTx, type RouteResult } from './social/txRouting.js';
+import {
+  routeDanaTx,
+  voteRowFromParts,
+  type RouteResult,
+} from './social/txRouting.js';
 
 const DEFAULT_CHRONIK = [
   'https://chronik.e.cash',
@@ -156,6 +160,32 @@ export async function ingestTxid(
     console.warn(`Ingest failed for tx ${id}:`, err);
     return emptyTotals();
   }
+}
+
+/**
+ * Heal posts verified before stamp burns counted as PAW: credit the anchor
+ * burn as the creator's first upvote. Idempotent (vote txid is unique), so it
+ * is safe to run on every startup.
+ */
+export async function backfillStampVotes(
+  chronik: ChronikClient,
+  tokenId: string,
+  social: SocialStore,
+): Promise<number> {
+  let healed = 0;
+  for (const post of social.listVerifiedPostsWithAnchor()) {
+    if (social.hasVote(post.anchorTxid)) continue;
+    try {
+      const tx = await chronik.tx(post.anchorTxid);
+      const stamp = voteRowFromParts(tx, tokenId, post.id, 1, {
+        burnedBy: senderAddressFromTx(tx),
+      });
+      if (stamp && social.recordVote(stamp) === 'inserted') healed += 1;
+    } catch (err) {
+      console.warn(`Stamp vote backfill failed for post ${post.id}:`, err);
+    }
+  }
+  return healed;
 }
 
 export interface SyncResult extends IngestTotals {

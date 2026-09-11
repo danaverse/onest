@@ -15,7 +15,8 @@ import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { setOfferingBlocksPwaReload } from '../lib/pwaReloadGate.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
-const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
+/** 6 PAW burned for the memorial (rebirth) + the desk listing fee. */
+const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 6n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
 /** Flat XEC fee (2,000 sats) plus network fees for the desk-paid path. */
 const MIN_PAY_XEC_SATS = 2_500n;

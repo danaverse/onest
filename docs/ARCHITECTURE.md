@@ -225,7 +225,7 @@ A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It i
 **Rules**
 
 - **A pet profile requires a user profile.** No wallet, no animal profile.
-- Pet profile creation **costs the user PAW, not XEC**: a **6-atom listing fee paid to the desk on each user-paid burn** (`PAW_LISTING_FEE_ATOMS`, default 6). The wallet must hold PAW to pay it, so spamming pet profiles costs real token value. XEC is only needed for network fees when the user pays their own way.
+- Pet profile creation **costs the user PAW, not XEC**: a **6-atom burn for the memorial (rebirth)** plus a **6-atom listing fee paid to the desk** (`PAW_LISTING_FEE_ATOMS`, default 6) on each user-paid burn. The wallet must hold PAW to pay it, so spamming pet profiles costs real token value. XEC is only needed for network fees when the user pays their own way.
 - **User-paid operations are immediate.** No soft wait and no heartbeat for wallet-path burns (profile, tribute, post or vote). The wait exists only where the desk sponsors fees.
 - Memorial tributes keep the sponsored PoW fallback for casual users; posts are XEC-paid and votes are PAW-first (then XEC) whenever a wallet is unlocked, and only visitors without a wallet fall back to the sponsored path until that is retired (see the votes section).
 
@@ -239,7 +239,7 @@ A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It i
 **Shipped flow**
 
 1. "Create user profile" → generate or restore wallet → show the XEC deposit address. The wallet can be locked/unlocked and the seed backed up from the account chip.
-2. Pet profile creation requires the unlocked wallet: the wallet builds and broadcasts a tx that burns 1 PAW, sends the **6-atom listing fee** to the desk and stamps the DANA profile note, paying XEC network fees. No wait. `mint-api` rejects sponsored root memorials server-side — sponsored burns are tributes only (`parentBurnTxid` required).
+2. Pet profile creation requires the unlocked wallet: the wallet builds and broadcasts a tx that burns **6 PAW (rebirth)**, sends the **6-atom listing fee** to the desk and stamps the DANA profile note, paying XEC network fees. No wait. `mint-api` rejects sponsored root memorials server-side — sponsored burns are tributes only (`parentBurnTxid` required).
 3. Later: wallet-only weighted votes; the remint fast path credits the wallet directly.
 
 ---
@@ -299,7 +299,7 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 - Server-enforced soft wait (`MINT_MIN_PRAY_SECONDS`, default 54)
 - Canvas client-side image compression; atom-weighted trending
 - User profiles: in-app `ecash-wallet` (BIP39, AES-GCM seed vault in IndexedDB, backup/restore/lock) with signed `install_id ↔ address` binding (`users` table)
-- Wallet-paid pet profiles: 1 PAW burn + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side
+- Wallet-paid pet profiles: 6 PAW burn (rebirth) + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side
 - Lixi-style home timeline with a composer card and **pet pages** (`/:txid`) showing a pet's moments and paw tributes
 
 ### Still to add
@@ -325,11 +325,11 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 4. **Post stamp** — shipped: PAW burn tx carries the DANA **v4** content hash; indexer verifies the hosted row before “verified.”
 5. **Feed UI** — shipped: Lixi-style home timeline (composer card, beloved-pages strip, moment cards) plus **pet pages** at `/:txid` with the pet's moments and paw tributes; video later.
 6. **Votes** — shipped: +1 PAW sponsored burn, DANA **v3** payload; weight = atoms; Chronik ingest; unique on `txid` only; stack burns per voter.
-7. **Stamp tiers** — sponsored path plus **flat-fee paid profiles** shipped: a wallet without PAW pays a flat XEC fee (default 20 XEC, `MINT_PROFILE_XEC_FEE`) and the desk spends 7 PAW from inventory (1 burned + 6 listing retained ≈ 7 XEC at the 1:1 reference; ~35–50% margin after the burn-tx fee). No remint, no PoW, no wait. Sponsored votes always mint fresh, which maintains inventory. PWA/mobile detection and Turnstile still to add.
+7. **Stamp tiers** — sponsored path plus **flat-fee paid profiles** shipped: a wallet without PAW pays a flat XEC fee (default 20 XEC, `MINT_PROFILE_XEC_FEE`) and the desk spends 12 PAW from inventory (6 burned for rebirth + 6 listing retained ≈ 12 XEC at the 1:1 reference; ~10–25% margin after the burn-tx fee). No remint, no PoW, no wait. Sponsored votes always mint fresh, which maintains inventory. PWA/mobile detection and Turnstile still to add.
 8. **Comments** — shipped: hosted (author soft-delete); optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
 10. **Postgres** — only after a second writer or a real ops need.
-11. **User profiles** — shipped (first release): in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore/lock, signed binding; pet profile creation requires the unlocked wallet, burns 1 PAW + pays the 6-atom desk listing fee, no wait; sponsored root memorials rejected. Remaining: wallet-only weighted votes.
+11. **User profiles** — shipped (first release): in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore/lock, signed binding; pet profile creation requires the unlocked wallet, burns 6 PAW (rebirth) + pays the 6-atom desk listing fee, no wait; sponsored root memorials rejected. Remaining: wallet-only weighted votes.
 12. **Wait-time heartbeat PoW** — future anti-farming for the sponsored path only: 6s calibrated mini-PoW beats through the soft wait (9 beats over the default 54s); `/api/burn` requires beat coverage.
 
 ---
@@ -347,10 +347,10 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 - **Wallet vote path (shipped):** **PAW first, then XEC, then PoW.** An unlocked wallet with ≥ 1 PAW burns its **own PAW** with the DANA v3 payload (XEC only covers the network fee; the burn sender is the voter, so the index attributes it on-chain). With no PAW it pays a flat XEC fee (`MINT_VOTE_XEC_FEE`, default **6 XEC** = 600 sats ≈ 1–2 XEC network + ≈ 4–5 XEC for the atom) and the desk burns 1 PAW from inventory — same verification as posts/profiles; retries reuse the pending payment per post+direction. With neither PAW nor XEC left (or no wallet at all), the sponsored PoW path runs. No listing fee, no remint, no wait on the paid paths.
 - **Sponsored vote path:** guests without a wallet keep the +1 sponsored path (PoW + soft wait + daily caps as the farming bound); N > 1 stays **no**. Retire it once wallets are common; then weighted votes spend the voter's PAW directly.
 - **Comments:** phase 2 (hosted), same identity rules as posts.
-- **Paid posts (shipped):** sharing a moment is XEC-paid like profiles — flat fee (`MINT_PROFILE_XEC_FEE`/`MINT_ACTION_XEC_FEE`, default 20 XEC), the desk burns 1 PAW with the DANA v4 content hash, no PoW and no wait. Voting follows the same pattern at a lower fee (no listing); only guests without a wallet (and memorial tributes) still use the sponsored PoW challenge + soft wait.
-- **Paid profiles (shipped, replaces client self-mint and the order-based exchange):** the user pays a flat XEC fee on-chain (`MINT_PROFILE_XEC_FEE`, default 20 XEC = 2,000 sats; verified on-chain, paid from the creator's wallet, txid single-use) and the desk spends **7 PAW from inventory** — 1 atom burned, 6 atoms listing fee retained. No remint, no PoW, no wait; margin ≈ 700–1,000 sats (~35–50%) after the burn-tx fee at the 1 XEC/atom reference. Sponsored votes keep minting fresh, maintaining inventory. Wallet-paid profiles (1 PAW + 6-atom listing fee) stay for wallets that hold PAW.
+- **Paid posts (shipped):** sharing a moment is XEC-paid like profiles — flat fee (`MINT_PROFILE_XEC_FEE`/`MINT_ACTION_XEC_FEE`, default 20 XEC), the desk burns 1 PAW with the DANA v4 content hash, no PoW and no wait. **The creator's stamp burn counts as the moment's first PAW**: the index tallies the stamp tx as an upvote, so a fresh post never shows 0. Voting follows the same pattern at a lower fee (no listing); only guests without a wallet (and memorial tributes) still use the sponsored PoW challenge + soft wait.
+- **Paid profiles (shipped, replaces client self-mint and the order-based exchange):** the user pays a flat XEC fee on-chain (`MINT_PROFILE_XEC_FEE`, default 20 XEC = 2,000 sats; verified on-chain, paid from the creator's wallet, txid single-use) and the desk spends **12 PAW from inventory** — **6 atoms burned for the memorial (rebirth)**, 6 atoms listing fee retained. No remint, no PoW, no wait; margin ≈ 200–500 sats (~10–25%) after the burn-tx fee at the 1 XEC/atom reference. Sponsored votes keep minting fresh, maintaining inventory. Wallet-paid profiles (6 PAW burned + 6-atom listing fee) stay for wallets that hold PAW.
 - **Ownership is on-chain:** new pet profiles write the creator's P2PKH `hash160` into the **DANA v5** payload, so a full index rebuild from Chronik restores “My Pets” with no private mapping (`/api/pets` reads the payload's creator; tx sender is the fallback for wallet-paid v1/v2 profiles). The notify `installId` path only backfills legacy profiles that predate v5.
-- **User profiles (shipped):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase (IndexedDB), with backup/restore/lock and a signed `installId ↔ address` binding. **Pet profile creation requires the unlocked wallet and pays a 6-atom PAW listing fee to the desk on user-paid burns** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**, and **no wait**. Posts and votes are XEC-paid when the wallet is unlocked; tributes and guest votes keep the sponsored fallback.
+- **User profiles (shipped):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase (IndexedDB), with backup/restore/lock and a signed `installId ↔ address` binding. **Pet profile creation requires the unlocked wallet and burns 6 PAW (rebirth) plus a 6-atom PAW listing fee to the desk on user-paid burns** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**, and **no wait**. Posts and votes are PAW/XEC-paid when the wallet is unlocked; tributes and guest votes keep the sponsored fallback.
 - **Wait-time heartbeat PoW (future):** the soft wait is split into **6s beats** (9 beats for the default 54s wait); each beat solves in ~2–4s on a standard WebGPU miner and the rest of the beat is slack. `/api/burn` requires beat coverage (allow ~1 miss). Raises marginal farming cost and requires presence; never delays remint. **Sponsored path only.**
 
 Change a decision here rather than scattering notes in PR descriptions.

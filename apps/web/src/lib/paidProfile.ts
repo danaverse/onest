@@ -1,6 +1,7 @@
 /**
  * Flat-fee paid profile: the wallet pays XEC on-chain and the desk burns
- * 1 PAW from inventory. Used when the wallet has no PAW.
+ * 6 PAW (rebirth) from inventory plus a 6-atom listing fee. Used when the
+ * wallet has no PAW.
  */
 import type { Wallet } from 'ecash-wallet';
 import { MINT_API_BASE, getOrCreateInstallId } from './config.js';

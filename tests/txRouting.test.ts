@@ -184,9 +184,12 @@ describe('tx routing', () => {
     expect(post?.status).toBe('verified');
     expect(post?.anchorTxid).toBe('33'.repeat(32));
     expect(post?.anchoredAt).toBe(1_788_000_100 * 1000);
+    /* The creator's stamp burn is the moment's first PAW. */
+    expect(post?.upvoteAtoms).toBe(1);
 
     const again = routeDanaTx({ tx, tokenId: TOKEN, push, burnStore: burns, social });
     expect(again.post).toBe(false);
+    expect(social.getPost(POST_HASH)?.upvoteAtoms).toBe(1);
   });
 
   it('records vote burns once and tallies the matching post', () => {

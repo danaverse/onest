@@ -34,6 +34,7 @@ import {
   profileBareNameFromNote,
 } from '../../../src/offering/animalProfileFields.js';
 import {
+  backfillStampVotes,
   createIngestChronik,
   ingestTxid,
   syncTokenHistory,
@@ -661,6 +662,11 @@ server.listen(PORT, () => {
   if (TOKEN_ID && /^[0-9a-fA-F]{64}$/.test(TOKEN_ID)) {
     void syncTokenHistory(chronik, TOKEN_ID, store, social)
       .then(r => console.log('initial sync', r))
+      .catch(console.warn);
+    void backfillStampVotes(chronik, TOKEN_ID, social)
+      .then(n => {
+        if (n > 0) console.log(`stamp vote backfill: +${n} posts`);
+      })
       .catch(console.warn);
     setInterval(() => {
       void syncTokenHistory(chronik, TOKEN_ID, store, social).catch(console.warn);
