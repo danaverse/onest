@@ -49,7 +49,8 @@ export type MessageKey =
   | 'voteNeedPaw'
   | 'voteNeedXec'
   | 'voteLockedHint'
-  | 'votePinNeeded'
+  | 'voteSubmit'
+  | 'votePowButton'
   | 'voteCounting'
   | 'votingStart'
   | 'votingRefreshing'
@@ -169,7 +170,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteNeedXec:
       'You need a little more XEC to vote. Send XEC to your wallet, then try again.',
     voteLockedHint: 'Unlock your account to vote with PAW or XEC.',
-    votePinNeeded: 'Enter your PIN to vote.',
+    voteSubmit: 'Vote',
+    votePowButton: 'Mine PoW to vote',
     voteCounting: 'Counting your vote...',
     votingStart: 'Preparing your vote...',
     votingRefreshing: 'Updating score...',
@@ -293,7 +295,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteNeedXec:
       'Bạn cần thêm một ít XEC để bình chọn. Hãy gửi XEC vào ví rồi thử lại.',
     voteLockedHint: 'Mở khóa tài khoản để bình chọn bằng PAW hoặc XEC.',
-    votePinNeeded: 'Nhập mã PIN để bình chọn.',
+    voteSubmit: 'Bình chọn',
+    votePowButton: 'Đào PoW để bình chọn',
     voteCounting: 'Đang ghi nhận bình chọn...',
     votingStart: 'Đang chuẩn bị bình chọn...',
     votingRefreshing: 'Đang cập nhật điểm...',
@@ -414,7 +417,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteNeedPaw: '从钱包投票至少需要 1 PAW。',
     voteNeedXec: 'XEC 不足，请先向钱包充值再投票。',
     voteLockedHint: '解锁账户后可用 PAW 或 XEC 投票。',
-    votePinNeeded: '请输入 PIN 码后投票。',
+    voteSubmit: '投票',
+    votePowButton: '挖矿 PoW 投票',
     voteCounting: '正在计入投票...',
     votingStart: '正在准备投票...',
     votingRefreshing: '正在更新分数...',

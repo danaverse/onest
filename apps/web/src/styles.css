@@ -1003,7 +1003,17 @@ body {
 }
 
 .vote-pin {
-  margin-bottom: 0.75rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.vote-actions {
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.vote-submit {
+  width: 100%;
 }
 
 .vote-pin input {
@@ -1047,6 +1057,10 @@ body {
   color: var(--vote-down);
   border-color: var(--vote-down);
   background: var(--vote-down-soft);
+}
+
+.btn-vote-choice.selected {
+  box-shadow: inset 0 0 0 2px currentColor;
 }
 
 .btn-vote-choice:disabled {
