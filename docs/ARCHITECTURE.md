@@ -218,7 +218,7 @@ Stay PWA. If a store listing is needed later, wrap the same web app (TWA / Capac
 
 ---
 
-## User profiles and the wallet (planned)
+## User profiles and the wallet (first release shipped)
 
 A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It is the identity, the fee source and the PAW inventory; pet profiles sit underneath it.
 
@@ -236,11 +236,11 @@ A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It i
 - **Backup:** reveal words behind passphrase re-entry, copy and download; show a write-it-down warning. **Restore:** enter words (BIP39 checksum) and recover the same address, PAW and XEC.
 - **Binding:** the user signs a message containing `installId`; the server stores `install_id ↔ address` and the address takes precedence for authorship, votes and ownership (see the identity decision). Losing both device and backup loses the wallet — say so plainly in the UI.
 
-**Flow (proposed, first release)**
+**Shipped flow**
 
-1. "Create user profile" → generate or restore wallet → show the XEC deposit address.
-2. Pet profile creation requires the wallet, burns 1 PAW for the memorial and pays the **6-atom listing fee** to the desk in the same flow. The desk keeps the existing sponsored remint for the PAW side, so issuance is unchanged; only the wallet requirement and the listing fee are new.
-3. Later, the remint fast path credits the wallet directly and tributes/posts/votes can spend user PAW.
+1. "Create user profile" → generate or restore wallet → show the XEC deposit address. The wallet can be locked/unlocked and the seed backed up from the account chip.
+2. Pet profile creation requires the unlocked wallet: the wallet builds and broadcasts a tx that burns 1 PAW, sends the **6-atom listing fee** to the desk and stamps the DANA profile note, paying XEC network fees. No wait. `mint-api` rejects sponsored root memorials server-side — sponsored burns are tributes only (`parentBurnTxid` required).
+3. Later: wallet-only weighted votes; the remint fast path credits the wallet directly.
 
 ---
 
@@ -298,6 +298,9 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 - DANA v3 vote / v4 post-stamp payloads + classifier; dual-cursor Chronik ingest
 - Server-enforced soft wait (`MINT_MIN_PRAY_SECONDS`, default 54)
 - Canvas client-side image compression; atom-weighted trending
+- User profiles: in-app `ecash-wallet` (BIP39, AES-GCM seed vault in IndexedDB, backup/restore/lock) with signed `install_id ↔ address` binding (`users` table)
+- Wallet-paid pet profiles: 1 PAW burn + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side
+- Lixi-style home timeline with a composer card and **pet pages** (`/:txid`) showing a pet's moments and paw tributes
 
 ### Still to add
 
@@ -306,7 +309,7 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 | Object store | Cloudflare R2 (zero egress) or S3-compatible; presigned PUT reusing the sha256 key |
 | Image variants | Cloudflare Images later (resize / WebP), not required for beta |
 | Bot check | Turnstile on sponsored challenge |
-| User profiles / wallet | In-app `ecash-wallet` (BIP39 + encrypted seed, backup/restore); pet profiles require the wallet + a 6-atom PAW listing fee; wallet-only weighted votes later |
+| Wallet votes | Weighted votes spend the wallet's PAW (burn + listing fee) with no wait; sponsored +1 stays as the casual fallback |
 | Heartbeat PoW | Future: 6s mini-PoW beats during the soft wait (9 beats over the default 54s); burn requires beat coverage |
 | Backups | `sqlite3 .backup` timer for the social DB; R2 lifecycle for orphaned objects |
 
@@ -320,13 +323,13 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 2. **Social store** — shipped: `dana-index` owns SQLite + Drizzle (`posts`, `post_media`, `media`, `votes`, `comments`, `ingest_state`); dual-cursor Chronik sync replaces the page-0-only backfill; `BurnStore` stays on JSON.
 3. **Upload** — shipped: raw sha256-keyed PUT to local disk (`ONEST_MEDIA_DIR`) behind an R2-ready interface.
 4. **Post stamp** — shipped: PAW burn tx carries the DANA **v4** content hash; indexer verifies the hosted row before “verified.”
-5. **Feed UI** — shipped: Moments feed on the PWA (caption + images; video later).
+5. **Feed UI** — shipped: Lixi-style home timeline (composer card, beloved-pages strip, moment cards) plus **pet pages** at `/:txid` with the pet's moments and paw tributes; video later.
 6. **Votes** — shipped: +1 PAW sponsored burn, DANA **v3** payload; weight = atoms; Chronik ingest; unique on `txid` only; stack burns per voter.
 7. **Stamp tiers** — sponsored path only for now; PWA/mobile detection, user-paid XEC and Turnstile still to add.
 8. **Comments** — shipped: hosted (author soft-delete); optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
 10. **Postgres** — only after a second writer or a real ops need.
-11. **User profiles** — in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore; pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk per user-paid burn (anti-spam); user-paid burns are immediate (no wait).
+11. **User profiles** — shipped (first release): in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore/lock, signed binding; pet profile creation requires the unlocked wallet, burns 1 PAW + pays the 6-atom desk listing fee, no wait; sponsored root memorials rejected. Remaining: wallet-only weighted votes.
 12. **Wait-time heartbeat PoW** — future anti-farming for the sponsored path only: 6s calibrated mini-PoW beats through the soft wait (9 beats over the default 54s); `/api/burn` requires beat coverage.
 
 ---
@@ -343,7 +346,7 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 - **Vote UX:** MVP is a single **+1** PAW vote; amount presets and an optional per-tx cap (suggested 108) come after launch. Stacked burns stand: **sum atoms, no one-vote-per-identity lock.**
 - **Sponsored vote path:** MVP +1 sponsored allowed (PoW + soft wait + daily caps as the farming bound); N > 1 stays **no**. Migrate to **wallet-only** weighted votes when farming becomes indefensible.
 - **Comments:** phase 2 (hosted), same identity rules as posts.
-- **User profiles (planned):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase with backup/restore. **Pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk on every user-paid burn** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**. User-paid burns are **immediate** (no wait). Tributes/posts/votes keep the sponsored fallback until user profiles are common, then weighted votes spend the voter's PAW.
+- **User profiles (shipped):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase (IndexedDB), with backup/restore/lock and a signed `installId ↔ address` binding. **Pet profile creation requires the unlocked wallet and pays a 6-atom PAW listing fee to the desk on user-paid burns** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**, and **no wait**. Tributes/posts/votes keep the sponsored fallback; wallet-only weighted votes remain.
 - **Wait-time heartbeat PoW (future):** the soft wait is split into **6s beats** (9 beats for the default 54s wait); each beat solves in ~2–4s on a standard WebGPU miner and the rest of the beat is slack. `/api/burn` requires beat coverage (allow ~1 miss). Raises marginal farming cost and requires presence; never delays remint. **Sponsored path only.**
 
 Change a decision here rather than scattering notes in PR descriptions.

@@ -73,7 +73,16 @@ export async function burnOnePaw(opts: {
   changeScript?: Script;
   /** Raw DANA pushdata override (v3 vote / v4 post stamp). */
   pushdata?: Uint8Array;
-}): Promise<{ txid: string; burnAtoms: bigint }> {
+  /** PAW atoms sent to the desk as a listing fee (user-paid burns only). */
+  feeAtoms?: bigint;
+  /** Desk address receiving the listing fee; required when feeAtoms > 0. */
+  feeAddress?: string;
+  /**
+   * User wallets: let ecash-wallet select UTXOs and change instead of the
+   * desk's small postage-reserve rules (1500–3500 sats).
+   */
+  autoSelectUtxos?: boolean;
+}): Promise<{ txid: string; burnAtoms: bigint; feeAtoms: bigint }> {
   const note = (opts.note ?? '').trim();
   const offeringId = opts.offeringId ?? OFFERING_ID_PAW;
   const parentBurnTxid = opts.parentBurnTxid
@@ -83,29 +92,36 @@ export async function burnOnePaw(opts: {
   if (burnAtoms < 1n) {
     throw new Error(`burnAtoms must be >= 1 (got ${burnAtoms})`);
   }
+  const feeAtoms = opts.feeAtoms ?? 0n;
+  const feeAddress = opts.feeAddress?.trim() || '';
+  if (feeAtoms > 0n && !feeAddress) {
+    throw new Error('feeAddress required when feeAtoms > 0');
+  }
 
   await opts.wallet.sync();
-  const tokenUtxos = pickTokenUtxosForBurn(
-    opts.wallet.utxos,
-    opts.tokenId,
-    burnAtoms,
-  );
 
-  const feeUtxo = pickBurnPostageUtxo(opts.wallet.utxos);
-  if (!feeUtxo) {
-    throw new Error(
-      'Tip needs a small burn-postage UTXO (15–35 XEC). Oversized reserves are not spent.',
+  let requiredUtxos: Array<{ txid: string; outIdx: number }> | undefined;
+  if (!opts.autoSelectUtxos) {
+    const tokenUtxos = pickTokenUtxosForBurn(
+      opts.wallet.utxos,
+      opts.tokenId,
+      burnAtoms + feeAtoms,
     );
+    const feeUtxo = pickBurnPostageUtxo(opts.wallet.utxos);
+    if (!feeUtxo) {
+      throw new Error(
+        'Tip needs a small burn-postage UTXO (15–35 XEC). Oversized reserves are not spent.',
+      );
+    }
+    requiredUtxos = [...tokenUtxos.map(u => u.outpoint), feeUtxo.outpoint];
   }
-  const requiredUtxos = [
-    ...tokenUtxos.map(u => u.outpoint),
-    feeUtxo.outpoint,
-  ];
 
-  const changeScript = opts.changeScript ?? opts.wallet.script;
+  const changeScript = opts.changeScript;
   const previous = opts.wallet.getChangeScript.bind(opts.wallet);
-  (opts.wallet as { getChangeScript: () => Script }).getChangeScript = () =>
-    changeScript;
+  if (changeScript) {
+    (opts.wallet as { getChangeScript: () => Script }).getChangeScript = () =>
+      changeScript;
+  }
 
   try {
     const outputs: payment.PaymentOutput[] = [{ sats: 0n }];
@@ -116,21 +132,39 @@ export async function burnOnePaw(opts: {
         tokenType: ALP_TOKEN_TYPE_STANDARD,
         burnAtoms,
       },
-      {
-        type: 'DATA',
-        data: opts.pushdata ?? memorialPushdata(note, offeringId, parentBurnTxid),
-      },
     ];
+    if (feeAtoms > 0n) {
+      outputs.push({
+        sats: 0n,
+        tokenId: opts.tokenId,
+        atoms: feeAtoms,
+        isMintBaton: false,
+        address: feeAddress,
+      });
+      tokenActions.push({
+        type: 'SEND',
+        tokenId: opts.tokenId,
+        tokenType: ALP_TOKEN_TYPE_STANDARD,
+      });
+    }
+    tokenActions.push({
+      type: 'DATA',
+      data: opts.pushdata ?? memorialPushdata(note, offeringId, parentBurnTxid),
+    });
 
-    const built = opts.wallet.action({ outputs, tokenActions, requiredUtxos }).build();
+    const built = opts.wallet
+      .action({ outputs, tokenActions, ...(requiredUtxos ? { requiredUtxos } : {}) })
+      .build();
     const resp = await built.broadcast();
     const txid = resp.broadcasted?.[0];
     if (!txid) {
       throw new Error('Broadcast returned no txid');
     }
-    return { txid, burnAtoms };
+    return { txid, burnAtoms, feeAtoms };
   } finally {
-    (opts.wallet as { getChangeScript: () => Script }).getChangeScript = previous;
+    if (changeScript) {
+      (opts.wallet as { getChangeScript: () => Script }).getChangeScript = previous;
+    }
   }
 }
 

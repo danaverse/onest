@@ -112,5 +112,21 @@ export const ingestState = sqliteTable('ingest_state', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+/**
+ * User profiles: device install bound to a self-custodial wallet address.
+ * The signature (verified server-side with ecash-lib verifyMsg) proves the
+ * device controls the address; the seed never leaves the client.
+ */
+export const users = sqliteTable(
+  'users',
+  {
+    installId: text('install_id').primaryKey(),
+    address: text('address').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  t => [index('users_address_idx').on(t.address)],
+);
+
 // FTS5 mirror of post captions lives in the generated migration as raw SQL
 // (drizzle-kit does not model virtual tables); queries use `sqlite.prepare`.

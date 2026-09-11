@@ -34,6 +34,10 @@ export default defineConfig({
       filename: 'sw.ts',
       registerType: 'autoUpdate',
       injectRegister: false,
+      injectManifest: {
+        // The lazy wallet chunk (ecash-wallet + ecash-lib) exceeds the 2 MiB default.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
       includeAssets: [
         'images/paw-icon.svg',
         'images/paw-192.png',

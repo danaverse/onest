@@ -14,6 +14,7 @@ import {
   media,
   postMedia,
   posts,
+  users,
   votes,
 } from './schema.js';
 import type * as schema from './schema.js';
@@ -67,6 +68,13 @@ export interface VoteRow {
   voterInstall: string | null;
   blockHeight: number | null;
   votedAt: number;
+}
+
+export interface UserRow {
+  installId: string;
+  address: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface CommentRow {
@@ -461,6 +469,48 @@ export class SocialStore {
         .from(comments)
         .where(and(eq(comments.postId, postId), eq(comments.removed, 0)))
         .get()?.n ?? 0
+    );
+  }
+
+  // ---------------------------------------------------------------- users
+
+  bindUser(input: { installId: string; address: string }): UserRow {
+    const now = Date.now();
+    const existing = this.getUser(input.installId);
+    const row: UserRow = {
+      installId: input.installId,
+      address: input.address.trim().toLowerCase(),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.db
+      .insert(users)
+      .values(row)
+      .onConflictDoUpdate({
+        target: users.installId,
+        set: { address: row.address, updatedAt: now },
+      })
+      .run();
+    return row;
+  }
+
+  getUser(installId: string): UserRow | null {
+    return (
+      this.db
+        .select()
+        .from(users)
+        .where(eq(users.installId, installId.trim()))
+        .get() ?? null
+    );
+  }
+
+  getUserByAddress(address: string): UserRow | null {
+    return (
+      this.db
+        .select()
+        .from(users)
+        .where(eq(users.address, address.trim().toLowerCase()))
+        .get() ?? null
     );
   }
 

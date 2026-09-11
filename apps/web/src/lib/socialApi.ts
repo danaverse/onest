@@ -13,6 +13,11 @@ export interface FeedMedia {
   position: number;
 }
 
+export interface PetInfo {
+  name: string;
+  species: string;
+}
+
 export interface FeedPost {
   id: string;
   petRootTxid: string;
@@ -26,6 +31,8 @@ export interface FeedPost {
   upvoteAtoms: number;
   downvoteAtoms: number;
   media: FeedMedia[];
+  /** Pet profile the post belongs to (enriched by the indexer). */
+  pet?: PetInfo | null;
 }
 
 export interface PostComment {
@@ -148,6 +155,18 @@ export async function fetchFeed(
   return res.json();
 }
 
+export async function fetchPetPosts(
+  petRootTxid: string,
+  limit = 30,
+): Promise<FeedPost[]> {
+  const res = await fetch(
+    `${apiBase()}/api/pets/${encodeURIComponent(petRootTxid)}/posts?limit=${limit}`,
+  );
+  if (!res.ok) throw await errorFrom(res, 'Pet posts');
+  const data = await res.json();
+  return data.posts ?? [];
+}
+
 export async function fetchTrendingPosts(limit = 6): Promise<FeedPost[]> {
   const res = await fetch(`${apiBase()}/api/feed/trending?limit=${limit}`);
   if (!res.ok) throw await errorFrom(res, 'Trending');
@@ -176,6 +195,32 @@ export async function addComment(
   if (!res.ok) throw await errorFrom(res, 'Comment');
   const data = await res.json();
   return data.comment;
+}
+
+export async function bindUserProfile(input: {
+  installId: string;
+  address: string;
+  message: string;
+  signature: string;
+}): Promise<{ installId: string; address: string }> {
+  const res = await fetch(`${apiBase()}/api/users/bind`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await errorFrom(res, 'Bind user profile');
+  const data = await res.json();
+  return data.user;
+}
+
+export async function fetchUserProfile(
+  installId: string,
+): Promise<{ installId: string; address: string } | null> {
+  const res = await fetch(`${apiBase()}/api/users/${encodeURIComponent(installId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw await errorFrom(res, 'User profile');
+  const data = await res.json();
+  return data.user ?? null;
 }
 
 export async function removePost(postId: string): Promise<void> {

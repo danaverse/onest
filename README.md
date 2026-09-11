@@ -10,7 +10,7 @@ Animal memories, paw-print tributes, and ALP PoW minting.
 
 - **`apps/mint-api`**: Device PoW challenge/submit desk with fee-sponsored remint and DANA memorial / post stamp / vote burns (`/api/challenge`, `/api/submit`, `/api/burn`, `/api/status`, `/api/root-creator`). Enforces the soft wait server-side (`MINT_MIN_PRAY_SECONDS`, default 54). Configured via `/etc/onest/mint.env` and `.env`.
 - **`apps/dana-index`**: Chronik-backed public history of PAW burns, animal profiles, search, trending, Open Graph preview cards (`/og/:txid`), and the hosted social store (SQLite + Drizzle: posts, votes, comments, hash-keyed media). Configured via `/etc/onest/dana-index.env` and `.env`.
-- **`apps/web`**: Lightweight Progressive Web App (PWA) shell for [onest.pet](https://onest.pet) with offline support, service worker auto-update, Web Worker client-side PoW mining, animal profile creation, paw-print tributes, and the Moments feed (share a post, +1 PAW vote, comments).
+- **`apps/web`**: Lightweight Progressive Web App (PWA) shell for [onest.pet](https://onest.pet) with offline support, service worker auto-update, Web Worker client-side PoW mining, a self-custodial user wallet (BIP39 seed backup/restore), animal profile creation, paw-print tributes, a Lixi-style Moments timeline, and pet pages (`/:txid`). Pet profiles are wallet-paid (1 PAW burn + 6-atom desk listing fee, no wait); tributes/posts/votes stay desk-sponsored with the server-enforced soft wait.
 
 ## Monorepo Layout
 
