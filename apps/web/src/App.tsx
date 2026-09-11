@@ -38,6 +38,7 @@ export default function App() {
   const [trending, setTrending] = useState<IndexMemorialGroup[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<IndexMemorialGroup[] | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [postsNext, setPostsNext] = useState<FeedPage['next']>(null);
@@ -115,6 +116,9 @@ export default function App() {
       setSearchResults(null);
       return;
     }
+    if (route.name !== 'home') {
+      goHome();
+    }
     const results = await searchProfiles(searchQuery.trim()).catch(() => []);
     setSearchResults(results);
   }
@@ -162,10 +166,37 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
+          <button
+            type="button"
+            className={`btn-header-search${searchOpen ? ' is-active' : ''}`}
+            aria-label={t('search')}
+            aria-expanded={searchOpen}
+            onClick={() => setSearchOpen(v => !v)}
+          >
+            🔍
+          </button>
           <AccountChip onOpen={() => setWalletOpen(true)} />
           <Header />
         </div>
       </header>
+
+      {searchOpen && (
+        <form onSubmit={handleSearch} className="search-form header-search">
+          <input
+            type="search"
+            autoFocus
+            placeholder={t('searchPlaceholder')}
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              if (!e.target.value.trim()) setSearchResults(null);
+            }}
+          />
+          <button type="submit" className="btn-search">
+            {t('search')}
+          </button>
+        </form>
+      )}
 
       <main className="onest-main">
         {route.name === 'pet' ? (
@@ -189,23 +220,6 @@ export default function App() {
               <span className="composer-avatar">🐾</span>
               <span className="composer-placeholder">{t('shareMomentPlaceholder')}</span>
               <span className="composer-photo">📷</span>
-            </section>
-
-            <section className="search-section">
-              <form onSubmit={handleSearch} className="search-form">
-                <input
-                  type="search"
-                  placeholder={t('searchPlaceholder')}
-                  value={searchQuery}
-                  onChange={e => {
-                    setSearchQuery(e.target.value);
-                    if (!e.target.value.trim()) setSearchResults(null);
-                  }}
-                />
-                <button type="submit" className="btn-search">
-                  {t('search')}
-                </button>
-              </form>
             </section>
 
             {searchResults ? (
