@@ -9,6 +9,8 @@ import { PostComposerModal, type PetOption } from './components/PostComposerModa
 import { PostCard } from './components/PostCard.js';
 import { PostDetailModal } from './components/PostDetailModal.js';
 import { PetPage } from './components/PetPage.js';
+import { MyPets } from './components/MyPets.js';
+import { TabBar, type AppTab } from './components/TabBar.js';
 import {
   fetchRecentBurns,
   fetchTrendingProfiles,
@@ -26,18 +28,12 @@ import { speciesEmoji } from './lib/petUi.js';
 
 const FEED_PAGE_SIZE = 12;
 
-interface PageCard {
-  txid: string;
-  name: string;
-  species: string;
-  tributes: number;
-}
-
 export default function App() {
   const { t } = useLocale();
   const [route, setRoute] = useState<{ name: 'home' } | { name: 'pet'; txid: string }>({
     name: 'home',
   });
+  const [tab, setTab] = useState<AppTab>('home');
   const [recent, setRecent] = useState<IndexBurn[]>([]);
   const [trending, setTrending] = useState<IndexMemorialGroup[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +51,7 @@ export default function App() {
     open: boolean;
     parentBurnTxid?: string;
   }>({ open: false });
+  const [petsRefresh, setPetsRefresh] = useState(0);
 
   useEffect(() => {
     loadFeed();
@@ -146,33 +143,6 @@ export default function App() {
     return [...byRoot.entries()].map(([txid, name]) => ({ txid, name }));
   }, [recent, trending]);
 
-  const pages: PageCard[] = useMemo(() => {
-    const byRoot = new Map<string, PageCard>();
-    for (const g of trending) {
-      byRoot.set(g.originalBurnTxid.toLowerCase(), {
-        txid: g.originalBurnTxid.toLowerCase(),
-        name: profileBareNameFromNote(g.originalNote) || 'Beloved pet',
-        species: '',
-        tributes: g.totalBurns,
-      });
-    }
-    for (const b of recent) {
-      const root = (b.originalBurnTxid || b.burnTxid).toLowerCase();
-      const existing = byRoot.get(root);
-      if (existing) {
-        if (!existing.species) existing.species = '';
-        continue;
-      }
-      byRoot.set(root, {
-        txid: root,
-        name: profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`,
-        species: '',
-        tributes: 1,
-      });
-    }
-    return [...byRoot.values()].slice(0, 12);
-  }, [recent, trending]);
-
   const petNameByRoot = useMemo(() => {
     const map = new Map<string, string>();
     for (const p of pets) map.set(p.txid.toLowerCase(), p.name);
@@ -205,6 +175,13 @@ export default function App() {
             onTribute={rootTxid => setProfileModal({ open: true, parentBurnTxid: rootTxid })}
             onShare={rootTxid => openComposer(rootTxid)}
             onOpenPost={id => setDetailPostId(id)}
+          />
+        ) : tab === 'mypets' ? (
+          <MyPets
+            refreshKey={petsRefresh}
+            onOpenPet={openPet}
+            onCreatePet={() => setProfileModal({ open: true })}
+            onRequestWallet={() => setWalletOpen(true)}
           />
         ) : (
           <>
@@ -257,46 +234,6 @@ export default function App() {
               </section>
             ) : (
               <>
-                <section className="pages-section">
-                  <div className="feed-head">
-                    <h2>{t('belovedPages')}</h2>
-                    <button
-                      type="button"
-                      className="btn-tribute-link"
-                      onClick={() => setProfileModal({ open: true })}
-                    >
-                      + {t('newProfile')}
-                    </button>
-                  </div>
-                  {pages.length > 0 ? (
-                    <div className="page-strip">
-                      {pages.map(p => (
-                        <button
-                          key={p.txid}
-                          type="button"
-                          className="page-chip"
-                          onClick={() => openPet(p.txid)}
-                        >
-                          <span className="page-chip-avatar">{speciesEmoji(p.species)}</span>
-                          <span className="page-chip-name">{p.name}</span>
-                          <span className="page-chip-sub">🐾 {p.tributes}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="create-pet-card">
-                      <p className="empty-hint">{t('noPagesYet')}</p>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => setProfileModal({ open: true })}
-                      >
-                        {t('newProfile')}
-                      </button>
-                    </div>
-                  )}
-                </section>
-
                 <section className="timeline-section">
                   <div className="feed-head">
                     <h2>{t('moments')}</h2>
@@ -380,6 +317,10 @@ export default function App() {
         )}
       </main>
 
+      {!profileModal.open && !composer.open && !detailPostId && !walletOpen && (
+        <TabBar tab={tab} onTab={setTab} />
+      )}
+
       <AnimalProfileModal
         open={profileModal.open}
         parentBurnTxid={profileModal.parentBurnTxid}
@@ -388,6 +329,7 @@ export default function App() {
         onSuccess={() => {
           loadFeed();
           loadPosts();
+          setPetsRefresh(n => n + 1);
         }}
       />
 

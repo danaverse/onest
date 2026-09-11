@@ -63,10 +63,15 @@ export type MessageKey =
   | 'restoreUserProfile'
   | 'userProfileIntro'
   | 'userProfileRequired'
-  | 'passphrase'
-  | 'confirmPassphrase'
-  | 'passphraseHint'
-  | 'passphraseMismatch'
+  | 'pin'
+  | 'confirmPin'
+  | 'pinHint'
+  | 'pinMismatch'
+  | 'pinCooldown'
+  | 'tabHome'
+  | 'tabMyPets'
+  | 'myPetsEmpty'
+  | 'myPetsLocked'
   | 'invalidSeed'
   | 'seedPhrase'
   | 'seedWarning'
@@ -161,10 +166,15 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Your user profile is a self-custodial XEC + PAW wallet. Create animal profiles from it — no server holds your keys.',
     userProfileRequired:
       'A user profile is required to create animal profiles. Your wallet burns 1 PAW and pays the desk listing fee.',
-    passphrase: 'Passphrase',
-    confirmPassphrase: 'Confirm passphrase',
-    passphraseHint: 'At least 8 characters',
-    passphraseMismatch: 'Passphrases do not match',
+    pin: 'PIN',
+    confirmPin: 'Confirm PIN',
+    pinHint: '4–12 digits',
+    pinMismatch: 'PINs do not match',
+    pinCooldown: 'Too many attempts — try again in {seconds}s',
+    tabHome: 'Home',
+    tabMyPets: 'My pets',
+    myPetsEmpty: 'No pet profiles yet. Create one from your wallet to start.',
+    myPetsLocked: 'Unlock your user profile to see your pets.',
     invalidSeed: 'Invalid seed phrase',
     seedPhrase: 'Seed phrase',
     seedWarning:
@@ -178,7 +188,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletReady: 'User profile ready!',
     walletReadyHint: 'Your wallet is unlocked. You can now create animal profiles.',
     loadingWallet: 'Opening your wallet...',
-    backupHint: 'Enter your passphrase to reveal your seed phrase.',
+    backupHint: 'Enter your PIN to reveal your seed phrase.',
     lockWallet: 'Lock',
     unlockWallet: 'Unlock',
     backupSeed: 'Backup seed',
@@ -261,10 +271,15 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Hồ sơ người dùng là ví XEC + PAW tự quản. Tạo hồ sơ thú cưng từ ví này — không máy chủ nào giữ khoá của bạn.',
     userProfileRequired:
       'Cần có hồ sơ người dùng để tạo hồ sơ thú cưng. Ví sẽ đốt 1 PAW và trả phí niêm yết cho bàn.',
-    passphrase: 'Mật khẩu',
-    confirmPassphrase: 'Nhập lại mật khẩu',
-    passphraseHint: 'Ít nhất 8 ký tự',
-    passphraseMismatch: 'Mật khẩu không khớp',
+    pin: 'Mã PIN',
+    confirmPin: 'Nhập lại mã PIN',
+    pinHint: '4–12 chữ số',
+    pinMismatch: 'Mã PIN không khớp',
+    pinCooldown: 'Sai quá nhiều lần — thử lại sau {seconds} giây',
+    tabHome: 'Trang chủ',
+    tabMyPets: 'Trang thú cưng',
+    myPetsEmpty: 'Chưa có hồ sơ thú cưng. Hãy tạo từ ví của bạn.',
+    myPetsLocked: 'Mở khoá hồ sơ người dùng để xem thú cưng.',
     invalidSeed: 'Cụm từ hạt giống không hợp lệ',
     seedPhrase: 'Cụm từ hạt giống',
     seedWarning:
@@ -278,7 +293,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletReady: 'Hồ sơ người dùng đã sẵn sàng!',
     walletReadyHint: 'Ví đã mở khoá. Bạn có thể tạo hồ sơ thú cưng.',
     loadingWallet: 'Đang mở ví...',
-    backupHint: 'Nhập mật khẩu để xem cụm từ hạt giống.',
+    backupHint: 'Nhập mã PIN để xem cụm từ hạt giống.',
     lockWallet: 'Khoá',
     unlockWallet: 'Mở khoá',
     backupSeed: 'Sao lưu hạt giống',
@@ -359,10 +374,15 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     userProfileIntro:
       '用户资料是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
     userProfileRequired: '创建宠物档案需要用户资料。钱包将销毁 1 PAW 并支付上架费。',
-    passphrase: '密码',
-    confirmPassphrase: '确认密码',
-    passphraseHint: '至少 8 个字符',
-    passphraseMismatch: '两次密码不一致',
+    pin: 'PIN 码',
+    confirmPin: '确认 PIN 码',
+    pinHint: '4–12 位数字',
+    pinMismatch: '两次 PIN 不一致',
+    pinCooldown: '尝试次数过多——请在 {seconds} 秒后重试',
+    tabHome: '首页',
+    tabMyPets: '我的宠物',
+    myPetsEmpty: '还没有宠物档案，请用钱包创建。',
+    myPetsLocked: '解锁用户资料后即可查看你的宠物。',
     invalidSeed: '助记词无效',
     seedPhrase: '助记词',
     seedWarning: '请将这 12 个单词抄写并离线保存。任何拿到它的人都能控制你的钱包。我们无法恢复。',
@@ -375,7 +395,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletReady: '用户资料已就绪！',
     walletReadyHint: '钱包已解锁，现在可以创建宠物档案。',
     loadingWallet: '正在打开钱包...',
-    backupHint: '输入密码以显示助记词。',
+    backupHint: '输入 PIN 码以显示助记词。',
     lockWallet: '锁定',
     unlockWallet: '解锁',
     backupSeed: '备份助记词',

@@ -1375,3 +1375,112 @@ body {
   width: auto;
   padding: 0.4rem 0.9rem;
 }
+
+/* ------------------------------------------- bottom nav (from WLotus TabBar) */
+
+.onest-app {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.glass-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 1.1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+}
+
+.glass-nav-shell {
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: min(20rem, 100%);
+  padding: 0.28rem;
+  border-radius: 999px;
+  isolation: isolate;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-card) 74%, transparent);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent);
+}
+
+.glass-nav-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+}
+
+.glass-nav-blob {
+  position: absolute;
+  top: 0.28rem;
+  bottom: 0.28rem;
+  left: 0.28rem;
+  width: calc(50% - 0.28rem);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: 0 4px 14px color-mix(in srgb, #000 18%, transparent);
+  transform: translateX(0);
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+
+.glass-nav-shell--mypets .glass-nav-blob {
+  transform: translateX(100%);
+}
+
+.glass-nav-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.55rem;
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.glass-nav-btn.is-active {
+  color: var(--accent);
+}
+
+.glass-nav-btn svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.pin-cooldown {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-nav-blob {
+    transition: none;
+  }
+}

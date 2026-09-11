@@ -6,13 +6,19 @@ import { generateMnemonic, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import type { ChronikClient } from 'chronik-client';
 import type { Wallet } from 'ecash-wallet';
-import { decryptSeed, encryptSeed } from '../../../../src/wallet/seedCrypto.js';
+import {
+  decryptSeed,
+  encryptSeed,
+  isValidPin,
+} from '../../../../src/wallet/seedCrypto.js';
 import { userBindMessage } from '../../../../src/wallet/bindMessage.js';
 import { CHRONIK_URLS, PAW_TOKEN_ID, getOrCreateInstallId } from './config.js';
 import {
   clearVault,
+  ensureDevicePepper,
   loadVault,
   saveVault,
+  vaultPepper,
   type StoredVault,
 } from './seedVault.js';
 import { bindUserProfile } from './socialApi.js';
@@ -47,6 +53,10 @@ export function validateUserMnemonic(mnemonic: string): boolean {
   }
 }
 
+export function validateUserPin(pin: string): boolean {
+  return isValidPin(pin);
+}
+
 export async function walletFromMnemonic(mnemonic: string): Promise<Wallet> {
   const { Wallet } = await import('ecash-wallet');
   return Wallet.fromMnemonic(mnemonic.trim().toLowerCase(), await webChronik());
@@ -58,14 +68,17 @@ export async function addressFromMnemonic(mnemonic: string): Promise<string> {
 
 export async function createVault(
   mnemonic: string,
-  passphrase: string,
+  pin: string,
 ): Promise<StoredVault> {
   if (!validateUserMnemonic(mnemonic)) throw new Error('Invalid seed phrase');
+  if (!validateUserPin(pin)) throw new Error('PIN must be 4–12 digits');
   const wallet = await walletFromMnemonic(mnemonic);
+  const pepper = await ensureDevicePepper();
   const vault: StoredVault = {
-    blob: await encryptSeed(mnemonic, passphrase),
+    blob: await encryptSeed(mnemonic, pin, { pepper }),
     address: wallet.address,
     createdAt: Date.now(),
+    peppered: true,
   };
   await saveVault(vault);
   return vault;
@@ -76,19 +89,21 @@ export async function readVault(): Promise<StoredVault | null> {
 }
 
 export async function unlockVault(
-  passphrase: string,
+  pin: string,
 ): Promise<{ wallet: Wallet; address: string }> {
   const vault = await loadVault();
   if (!vault) throw new Error('No user profile on this device');
-  const mnemonic = await decryptSeed(vault.blob, passphrase);
+  const pepper = await vaultPepper(vault);
+  const mnemonic = await decryptSeed(vault.blob, pin, { pepper });
   const wallet = await walletFromMnemonic(mnemonic);
   return { wallet, address: wallet.address };
 }
 
-export async function exportVaultMnemonic(passphrase: string): Promise<string> {
+export async function exportVaultMnemonic(pin: string): Promise<string> {
   const vault = await loadVault();
   if (!vault) throw new Error('No user profile on this device');
-  return decryptSeed(vault.blob, passphrase);
+  const pepper = await vaultPepper(vault);
+  return decryptSeed(vault.blob, pin, { pepper });
 }
 
 export async function removeVault(): Promise<void> {
