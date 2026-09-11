@@ -16,6 +16,7 @@ import {
   type WalletBalances,
 } from '../lib/userWallet.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
+import { useWallet } from '../wallet/WalletContext.js';
 import { BrandMark } from './BrandMark.js';
 
 type VoteMethod = 'paw' | 'xec' | 'pow';
@@ -40,129 +41,211 @@ function sleep(ms: number): Promise<void> {
 export function VoteModal(props: {
   open: boolean;
   post: FeedPost;
-  wallet: Wallet;
   onClose: () => void;
   onVoted?: (post: FeedPost) => void;
   onError?: (message: string) => void;
 }) {
   const { t } = useLocale();
+  const { status, wallet, unlock, pinLength } = useWallet();
   const [fee, setFee] = useState<VoteFee | null>(null);
+  const [stage, setStage] = useState<'choose' | 'confirm'>('choose');
+  const [direction, setDirection] = useState<VoteDirection | null>(null);
   const [method, setMethod] = useState<VoteMethod | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+
+  const locked = status === 'locked';
 
   useEffect(() => {
     if (!props.open) return;
     setError(null);
-    setStatus(null);
+    setStatusMsg(null);
+    setStage('choose');
+    setDirection(null);
     setMethod(null);
-    let cancelled = false;
-    Promise.all([
-      fetchVoteFee().catch(() => null),
-      fetchWalletBalances(props.wallet).catch(() => null),
-    ]).then(([feeRes, balances]) => {
-      if (cancelled) return;
-      setFee(feeRes);
-      if (balances) {
-        setMethod(
-          chooseMethod(balances, feeRes ? BigInt(feeRes.xecSats) : null),
-        );
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [props.open, props.wallet]);
+    setPin('');
+    fetchVoteFee()
+      .then(setFee)
+      .catch(() => setFee(null));
+  }, [props.open]);
 
   if (!props.open) return null;
 
-  const hint =
-    method === 'paw'
-      ? t('votePawHint')
-      : method === 'xec'
-        ? fee
-          ? t('voteFeeHint').replace('{xec}', fee.xec)
-          : null
-        : method === 'pow'
-          ? t('powHint')
-          : null;
+  function hintFor(): string | null {
+    if (locked) return t('voteLockedHint');
+    if (method === 'paw') return t('votePawHint');
+    if (method === 'xec') {
+      return fee ? t('voteFeeHint').replace('{xec}', fee.xec) : null;
+    }
+    if (method === 'pow') return t('powHint');
+    return null;
+  }
 
-  async function cast(direction: VoteDirection) {
-    if (busy) return;
+  function mapError(err: unknown) {
+    const message = err instanceof Error ? err.message : 'Vote failed';
+    if (message === 'VOTE_NEED_XEC') {
+      setError(t('voteNeedXec'));
+    } else if (message === 'VOTE_NEED_PAW') {
+      setError(t('voteNeedPaw'));
+    } else {
+      setError(message);
+      props.onError?.(message);
+    }
+  }
+
+  async function resolveMethod(voter: Wallet): Promise<VoteMethod> {
+    const balances = await fetchWalletBalances(voter).catch(() => null);
+    const resolved = balances
+      ? chooseMethod(balances, fee ? BigInt(fee.xecSats) : null)
+      : 'pow';
+    setMethod(resolved);
+    return resolved;
+  }
+
+  async function pollAndClose(dir: VoteDirection) {
+    setStatusMsg(t('voteCounting'));
+    const before = dir === 1 ? props.post.upvoteAtoms : props.post.downvoteAtoms;
+    let fresh: FeedPost | null = null;
+    for (let i = 0; i < 6; i++) {
+      await sleep(1_500);
+      fresh = await fetchPost(props.post.id)
+        .then(r => r.post)
+        .catch(() => null);
+      const now = fresh
+        ? dir === 1
+          ? fresh.upvoteAtoms
+          : fresh.downvoteAtoms
+        : null;
+      if (now !== null && now > before) break;
+    }
+    props.onVoted?.(
+      fresh ??
+        (dir === 1
+          ? { ...props.post, upvoteAtoms: props.post.upvoteAtoms + 1 }
+          : { ...props.post, downvoteAtoms: props.post.downvoteAtoms + 1 }),
+    );
+    props.onClose();
+  }
+
+  async function perform(
+    voter: Wallet,
+    dir: VoteDirection,
+    paidMethod: 'paw' | 'xec',
+  ) {
     setBusy(true);
     setError(null);
     try {
-      const balances = await fetchWalletBalances(props.wallet).catch(
-        () => null,
-      );
-      const useMethod = balances
-        ? chooseMethod(balances, fee ? BigInt(fee.xecSats) : null)
-        : 'pow';
-      setMethod(useMethod);
-
-      if (useMethod === 'paw') {
+      if (paidMethod === 'paw') {
         await createVoteWithPaw({
-          wallet: props.wallet,
+          wallet: voter,
           postId: props.post.id,
-          direction,
-          onProgress: setStatus,
+          direction: dir,
+          onProgress: setStatusMsg,
         });
-      } else if (useMethod === 'xec') {
+      } else {
         await createPaidVoteWithXec({
-          wallet: props.wallet,
+          wallet: voter,
           postId: props.post.id,
-          direction,
-          onProgress: setStatus,
-        });
-      } else {
-        await runSponsoredOffer({
-          kind: 'vote',
-          postHash: props.post.id,
-          direction,
-          onProgress: setStatus,
+          direction: dir,
+          onProgress: setStatusMsg,
         });
       }
-
-      setStatus(t('voteCounting'));
-      const before =
-        direction === 1 ? props.post.upvoteAtoms : props.post.downvoteAtoms;
-      let fresh: FeedPost | null = null;
-      for (let i = 0; i < 6; i++) {
-        await sleep(1_500);
-        fresh = await fetchPost(props.post.id)
-          .then(r => r.post)
-          .catch(() => null);
-        const now = fresh
-          ? direction === 1
-            ? fresh.upvoteAtoms
-            : fresh.downvoteAtoms
-          : null;
-        if (now !== null && now > before) break;
-      }
-
-      props.onVoted?.(
-        fresh ??
-          (direction === 1
-            ? { ...props.post, upvoteAtoms: props.post.upvoteAtoms + 1 }
-            : { ...props.post, downvoteAtoms: props.post.downvoteAtoms + 1 }),
-      );
-      props.onClose();
+      await pollAndClose(dir);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Vote failed';
-      if (message === 'VOTE_NEED_XEC') {
-        setError(t('voteNeedXec'));
-      } else if (message === 'VOTE_NEED_PAW') {
-        setError(t('voteNeedPaw'));
-      } else {
-        setError(message);
-        props.onError?.(message);
-      }
+      mapError(err);
     } finally {
       setBusy(false);
-      setStatus(null);
+      setStatusMsg(null);
     }
   }
+
+  async function runPow() {
+    if (direction == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await runSponsoredOffer({
+        kind: 'vote',
+        postHash: props.post.id,
+        direction,
+        onProgress: setStatusMsg,
+      });
+      await pollAndClose(direction);
+    } catch (err) {
+      mapError(err);
+    } finally {
+      setBusy(false);
+      setStatusMsg(null);
+    }
+  }
+
+  function select(dir: VoteDirection) {
+    if (busy || unlocking) return;
+    setDirection(dir);
+    setStage('confirm');
+    setError(null);
+    setMethod(null);
+    if (status === 'unlocked' && wallet) void resolveMethod(wallet);
+  }
+
+  async function submitUnlocked() {
+    if (direction == null || !wallet) return;
+    const resolved = method ?? (await resolveMethod(wallet));
+    if (resolved === 'pow') {
+      await runPow();
+      return;
+    }
+    await perform(wallet, direction, resolved);
+  }
+
+  async function unlockNow(value: string): Promise<Wallet | null> {
+    if (value.length < 4) return null;
+    setUnlocking(true);
+    setError(null);
+    try {
+      const unlocked = await unlock(value);
+      setPin('');
+      return unlocked;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Wrong PIN');
+      return null;
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
+  /* PIN matched: burn automatically (paw/xec). If the wallet is empty, wait
+     for the explicit PoW button tap. */
+  async function onPinComplete(value: string) {
+    const voter = await unlockNow(value);
+    if (!voter || direction == null) return;
+    const resolved = await resolveMethod(voter);
+    if (resolved === 'pow') return;
+    await perform(voter, direction, resolved);
+  }
+
+  const choice = (dir: VoteDirection, label: string, arrow: string) => (
+    <button
+      type="button"
+      className={`btn-vote-choice ${dir === 1 ? 'up' : 'down'}${
+        direction === dir ? ' selected' : ''
+      }`}
+      disabled={busy || unlocking}
+      onClick={() => select(dir)}
+    >
+      <span className="vote-choice-arrow">{arrow}</span>
+      <span className="vote-choice-label">{label}</span>
+      <span className="vote-choice-amount">
+        <BrandMark width={14} height={14} />
+        1 PAW
+      </span>
+    </button>
+  );
+
+  const hint = hintFor();
 
   return (
     <div
@@ -189,36 +272,48 @@ export function VoteModal(props: {
         </div>
 
         {error && <div className="error-box">{error}</div>}
-        {status && <div className="status-box">{status}</div>}
+        {statusMsg && <div className="status-box">{statusMsg}</div>}
 
         <div className="vote-choices">
-          <button
-            type="button"
-            className="btn-vote-choice up"
-            disabled={busy}
-            onClick={() => cast(1)}
-          >
-            <span className="vote-choice-arrow">▲</span>
-            <span className="vote-choice-label">{t('voteUp')}</span>
-            <span className="vote-choice-amount">
-              <BrandMark width={14} height={14} />
-              1 PAW
-            </span>
-          </button>
-          <button
-            type="button"
-            className="btn-vote-choice down"
-            disabled={busy}
-            onClick={() => cast(0)}
-          >
-            <span className="vote-choice-arrow">▼</span>
-            <span className="vote-choice-label">{t('voteDown')}</span>
-            <span className="vote-choice-amount">
-              <BrandMark width={14} height={14} />
-              1 PAW
-            </span>
-          </button>
+          {choice(1, t('voteUp'), '▲')}
+          {choice(0, t('voteDown'), '▼')}
         </div>
+
+        {stage === 'confirm' && (
+          locked ? (
+            <div className="vote-pin">
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                maxLength={12}
+                placeholder={t('pinHint')}
+                value={pin}
+                disabled={unlocking || busy}
+                onChange={e => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+                  setPin(v);
+                  /* Windows Hello style: unlock + burn as soon as the PIN is in. */
+                  if (pinLength && v.length === pinLength) void onPinComplete(v);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="vote-actions">
+              <button
+                type="button"
+                className="btn-primary vote-submit"
+                disabled={busy || unlocking || method === null}
+                onClick={() =>
+                  method === 'pow' ? void runPow() : void submitUnlocked()
+                }
+              >
+                {method === 'pow' ? t('votePowButton') : t('voteSubmit')}
+              </button>
+            </div>
+          )
+        )}
 
         {hint && <p className="pow-hint">{hint}</p>}
       </div>

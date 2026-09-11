@@ -49,6 +49,8 @@ export type MessageKey =
   | 'voteNeedPaw'
   | 'voteNeedXec'
   | 'voteLockedHint'
+  | 'voteSubmit'
+  | 'votePowButton'
   | 'voteCounting'
   | 'votingStart'
   | 'votingRefreshing'
@@ -163,12 +165,13 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteTitle: 'Vote on this moment',
     votePawHint:
       'Burn 1 PAW from your wallet — you only pay the network fee. No listing fee.',
-    voteFeeHint:
-      'You pay {xec} XEC — burns 1 PAW. No listing fee, no mining wait.',
+    voteFeeHint: 'You pay {xec} XEC to vote instantly.',
     voteNeedPaw: 'You need at least 1 PAW to vote from your wallet.',
     voteNeedXec:
       'You need a little more XEC to vote. Send XEC to your wallet, then try again.',
     voteLockedHint: 'Unlock your account to vote with PAW or XEC.',
+    voteSubmit: 'Vote',
+    votePowButton: 'Mine PoW to vote',
     voteCounting: 'Counting your vote...',
     votingStart: 'Preparing your vote...',
     votingRefreshing: 'Updating score...',
@@ -287,12 +290,13 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteTitle: 'Bình chọn cho khoảnh khắc này',
     votePawHint:
       'Đốt 1 PAW từ ví của bạn — chỉ trả phí mạng. Không phí niêm yết.',
-    voteFeeHint:
-      'Bạn trả {xec} XEC — đốt 1 PAW. Không phí niêm yết, không chờ đào.',
+    voteFeeHint: 'Bạn trả {xec} XEC để vote ngay tức thì.',
     voteNeedPaw: 'Bạn cần ít nhất 1 PAW để bình chọn từ ví.',
     voteNeedXec:
       'Bạn cần thêm một ít XEC để bình chọn. Hãy gửi XEC vào ví rồi thử lại.',
     voteLockedHint: 'Mở khóa tài khoản để bình chọn bằng PAW hoặc XEC.',
+    voteSubmit: 'Bình chọn',
+    votePowButton: 'Đào PoW để bình chọn',
     voteCounting: 'Đang ghi nhận bình chọn...',
     votingStart: 'Đang chuẩn bị bình chọn...',
     votingRefreshing: 'Đang cập nhật điểm...',
@@ -409,10 +413,12 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteDown: '点踩',
     voteTitle: '为这一刻投票',
     votePawHint: '从你的钱包销毁 1 PAW——只需支付网络费，无上架费。',
-    voteFeeHint: '支付 {xec} XEC——销毁 1 PAW。无上架费，无需等待挖矿。',
+    voteFeeHint: '支付 {xec} XEC 即可立即投票。',
     voteNeedPaw: '从钱包投票至少需要 1 PAW。',
     voteNeedXec: 'XEC 不足，请先向钱包充值再投票。',
     voteLockedHint: '解锁账户后可用 PAW 或 XEC 投票。',
+    voteSubmit: '投票',
+    votePowButton: '挖矿 PoW 投票',
     voteCounting: '正在计入投票...',
     votingStart: '正在准备投票...',
     votingRefreshing: '正在更新分数...',

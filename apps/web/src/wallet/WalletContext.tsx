@@ -41,7 +41,8 @@ interface WalletCtx {
   validateMnemonic(mnemonic: string): boolean;
   createProfile(mnemonic: string, passphrase: string): Promise<void>;
   restoreProfile(mnemonic: string, passphrase: string): Promise<void>;
-  unlock(passphrase: string): Promise<void>;
+  /** Returns the unlocked wallet so callers can continue in the same step. */
+  unlock(passphrase: string): Promise<Wallet>;
   lock(): void;
   refresh(): Promise<void>;
   backup(passphrase: string): Promise<string>;
@@ -107,11 +108,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const run = useCallback(
-    async (fn: () => Promise<void>) => {
+    async <T,>(fn: () => Promise<T>): Promise<T> => {
       setBusy(true);
       setError(null);
       try {
-        await fn();
+        return await fn();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Wallet error');
         throw e;
@@ -150,6 +151,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       run(async () => {
         const { wallet: unlocked } = await unlockVault(passphrase);
         await activate(unlocked);
+        return unlocked;
       }),
     [activate, run],
   );
