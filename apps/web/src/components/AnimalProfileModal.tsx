@@ -17,6 +17,8 @@ import { useWallet } from '../wallet/WalletContext.js';
 
 const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
+/** Flat XEC fee (2,000 sats) plus network fees for the desk-paid path. */
+const MIN_PAY_XEC_SATS = 2_500n;
 
 export function AnimalProfileModal(props: {
   open: boolean;
@@ -57,6 +59,13 @@ export function AnimalProfileModal(props: {
   if (!props.open) return null;
 
   const isCreate = !props.parentBurnTxid;
+  const unlocked = userWallet.status === 'unlocked';
+  const pawAtoms = userWallet.balances?.pawAtoms ?? 0n;
+  const xecSats = userWallet.balances?.xecSats ?? 0n;
+  /** Single action: PAW path when the wallet holds PAW, else pay XEC. */
+  const payMode = isCreate && unlocked && pawAtoms < MIN_PROFILE_PAW;
+  const neededXec = payMode ? MIN_PAY_XEC_SATS : MIN_PROFILE_XEC_SATS;
+  const xecShort = unlocked && xecSats < neededXec;
 
   function buildProfileFields(): AnimalProfileFields {
     return {
@@ -102,10 +111,19 @@ export function AnimalProfileModal(props: {
     e.preventDefault();
     if (isCreate ? !name.trim() : !note.trim()) return;
     if (isCreate) {
-      await handleCreateProfile();
-    } else {
-      await handleSponsoredTribute();
+      if (!unlocked) {
+        setErr(t('userProfileRequired'));
+        props.onRequestWallet?.();
+        return;
+      }
+      if (payMode) {
+        await handlePayXec();
+      } else {
+        await handleCreateProfile();
+      }
+      return;
     }
+    await handleSponsoredTribute();
   }
 
   async function handleCreateProfile() {
@@ -316,47 +334,25 @@ export function AnimalProfileModal(props: {
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
 
-            {isCreate &&
-              !busy &&
-              (userWallet.status !== 'unlocked' ||
-                (userWallet.balances != null &&
-                  (userWallet.balances.pawAtoms < MIN_PROFILE_PAW ||
-                    userWallet.balances.xecSats < MIN_PROFILE_XEC_SATS))) && (
-                <div className="wallet-gate">
-                  <p>
-                    {userWallet.status !== 'unlocked'
-                      ? t('userProfileRequired')
-                      : userWallet.balances != null &&
-                          userWallet.balances.pawAtoms < MIN_PROFILE_PAW
-                        ? t('needPawForProfile', { atoms: Number(MIN_PROFILE_PAW) })
-                        : t('needXecForProfile')}
-                  </p>
-                  {userWallet.address && (
-                    <code className="wallet-address">{userWallet.address}</code>
-                  )}
-                  {userWallet.status === 'unlocked' &&
-                    userWallet.balances != null &&
-                    userWallet.balances.pawAtoms < MIN_PROFILE_PAW && (
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={busy}
-                        onClick={handlePayXec}
-                      >
-                        {profileFee
-                          ? t('payToCreateWithXec', { xec: profileFee.xec })
-                          : t('payToCreate')}
-                      </button>
-                    )}
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => props.onRequestWallet?.()}
-                  >
-                    {userWallet.address ? t('openUserProfile') : t('createUserProfile')}
-                  </button>
-                </div>
-              )}
+            {isCreate && !busy && (!unlocked || xecShort) && (
+              <div className="wallet-gate">
+                <p>
+                  {!unlocked
+                    ? t('userProfileRequired')
+                    : t('needXecForProfile')}
+                </p>
+                {userWallet.address && (
+                  <code className="wallet-address">{userWallet.address}</code>
+                )}
+                <button
+                  type="button"
+                  className="btn-tribute-link"
+                  onClick={() => props.onRequestWallet?.()}
+                >
+                  {userWallet.address ? t('openUserProfile') : t('createUserProfile')}
+                </button>
+              </div>
+            )}
 
             {!busy && (
               <p className="pow-hint">
@@ -368,13 +364,33 @@ export function AnimalProfileModal(props: {
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={busy || (props.parentBurnTxid ? !note.trim() : !name.trim())}
-                className="btn-primary"
-              >
-                {busy ? t('miningTribute') : t('submitTribute')}
-              </button>
+              {isCreate && !unlocked ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => props.onRequestWallet?.()}
+                >
+                  {userWallet.address ? t('unlockWallet') : t('createUserProfile')}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    xecShort ||
+                    (props.parentBurnTxid ? !note.trim() : !name.trim())
+                  }
+                  className="btn-primary"
+                >
+                  {busy
+                    ? t('posting')
+                    : payMode
+                      ? profileFee
+                        ? t('payToCreateWithXec', { xec: profileFee.xec })
+                        : t('payToCreate')
+                      : t('submitTribute')}
+                </button>
+              )}
             </div>
           </form>
         )}
