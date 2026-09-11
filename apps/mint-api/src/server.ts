@@ -20,6 +20,8 @@ import {
   enqueueCancel,
   enqueueChallenge,
   enqueueSubmit,
+  listingFeeInfo,
+  notifyDanaIndex,
   publicStatus,
   remainingOffersToday,
   requireMintDesk,
@@ -109,6 +111,27 @@ const server = createServer(async (req, res) => {
       }
       const status = checkRootCreator({ rootBurnTxid: txid, installId });
       json(res, 200, status);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/listing-fee') {
+      const info = await listingFeeInfo();
+      json(res, 200, { ok: true, ...info });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/notify') {
+      const body = await readJsonBody(req);
+      const burnTxid = String(body.burnTxid || '').trim().toLowerCase();
+      if (!/^[0-9a-fA-F]{64}$/.test(burnTxid)) {
+        json(res, 400, { error: 'valid burnTxid required' });
+        return;
+      }
+      notifyDanaIndex(
+        burnTxid,
+        typeof body.installId === 'string' ? body.installId : undefined,
+      );
+      json(res, 200, { ok: true });
       return;
     }
 

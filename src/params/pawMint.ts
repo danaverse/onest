@@ -48,3 +48,23 @@ export function isPawWLotusCovenant(
 
 export const isPawFeltCovenant = isPawWLotusCovenant;
 export const isPawGlotusCovenant = isPawWLotusCovenant;
+
+/**
+ * PAW atoms paid to the desk as a listing fee on every user-paid burn
+ * (pet profile creation, and later wallet-path tributes/posts/votes).
+ * Sponsored burns do not pay this fee — the desk already keeps the remint.
+ */
+export const PAW_LISTING_FEE_ATOMS = 6n;
+
+export function resolvePawListingFeeAtoms(
+  raw: string | number | bigint | null | undefined,
+): bigint {
+  if (raw == null || String(raw).trim() === '') return PAW_LISTING_FEE_ATOMS;
+  try {
+    const n = BigInt(String(raw).trim());
+    if (n < 0n) return PAW_LISTING_FEE_ATOMS;
+    return n;
+  } catch {
+    return PAW_LISTING_FEE_ATOMS;
+  }
+}

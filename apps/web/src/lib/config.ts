@@ -13,6 +13,12 @@ export const MINT_API_BASE =
 export const DANA_INDEX_BASE =
   (import.meta.env.VITE_DANA_INDEX_BASE as string | undefined)?.trim() || '';
 
+export const CHRONIK_URLS: string[] =
+  (import.meta.env.VITE_CHRONIK_URLS as string | undefined)
+    ?.split(',')
+    .map(s => s.trim())
+    .filter(Boolean) ?? [];
+
 export const INSTALL_ID_KEY = 'onest.installId';
 
 export function getOrCreateInstallId(): string {

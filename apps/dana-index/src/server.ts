@@ -27,6 +27,12 @@ import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { config as loadEnv } from 'dotenv';
+import { verifyMsg } from 'ecash-lib';
+import { userBindMessage } from '../../../src/wallet/bindMessage.js';
+import {
+  parseAnimalProfileNote,
+  profileBareNameFromNote,
+} from '../../../src/offering/animalProfileFields.js';
 import {
   createIngestChronik,
   ingestTxid,
@@ -175,6 +181,25 @@ function html(
 
 class BadRequestError extends Error {}
 
+/** Attach the pet profile (name/species) a post belongs to, when indexed. */
+function petInfoFor(
+  rootTxid: string,
+): { name: string; species: string } | null {
+  const item = store.get(rootTxid);
+  if (!item?.note) return null;
+  const parsed = parseAnimalProfileNote(item.note);
+  return {
+    name: profileBareNameFromNote(item.note) || '',
+    species: parsed?.species || '',
+  };
+}
+
+function withPetInfo<T extends { petRootTxid: string }>(
+  posts: T[],
+): Array<T & { pet: { name: string; species: string } | null }> {
+  return posts.map(p => ({ ...p, pet: petInfoFor(p.petRootTxid) }));
+}
+
 function requireInstallId(raw: unknown): string {
   const installId = String(raw || '').trim();
   if (!installId || installId.length < 8 || installId.length > 128) {
@@ -272,11 +297,55 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // ------------------------------------------------------------- users
+
+    if (req.method === 'POST' && normPath === '/api/users/bind') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      writesPerIpPerMin.consume(normalizeClientIp(clientIp(req)));
+      const address = String(body.address || '').trim();
+      const signature = String(body.signature || '').trim();
+      if (!address || !signature) {
+        json(res, 400, { error: 'address and signature required' });
+        return;
+      }
+      let verified = false;
+      try {
+        verified = verifyMsg(userBindMessage(installId), signature, address);
+      } catch {
+        verified = false;
+      }
+      if (!verified) {
+        json(res, 403, { error: 'signature does not match address' });
+        return;
+      }
+      const user = social.bindUser({ installId, address });
+      json(res, 200, { ok: true, user });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath.startsWith('/api/users/')) {
+      const installId = decodeURIComponent(
+        normPath.slice('/api/users/'.length),
+      ).trim();
+      if (!installId) {
+        json(res, 400, { error: 'installId required' });
+        return;
+      }
+      const user = social.getUser(installId);
+      if (!user) {
+        json(res, 404, { error: 'user not found' });
+        return;
+      }
+      json(res, 200, { ok: true, user });
+      return;
+    }
+
     // ------------------------------------------------------------- social feed
 
     if (req.method === 'GET' && normPath === '/api/feed/trending') {
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
-      json(res, 200, { ok: true, posts: social.listTrending(14, limit) });
+      json(res, 200, { ok: true, posts: withPetInfo(social.listTrending(14, limit)) });
       return;
     }
 
@@ -285,12 +354,14 @@ const server = createServer(async (req, res) => {
       const beforeCreatedAt = Number(url.searchParams.get('beforeCreatedAt') || 0);
       const beforeId = normalizeHex64(url.searchParams.get('beforeId'));
       const q = (url.searchParams.get('q') || '').trim();
-      const posts = social.listFeed({
-        limit,
-        beforeCreatedAt: beforeCreatedAt > 0 ? beforeCreatedAt : undefined,
-        beforeId: beforeId ?? undefined,
-        q: q || undefined,
-      });
+      const posts = withPetInfo(
+        social.listFeed({
+          limit,
+          beforeCreatedAt: beforeCreatedAt > 0 ? beforeCreatedAt : undefined,
+          beforeId: beforeId ?? undefined,
+          q: q || undefined,
+        }),
+      );
       const last = posts[posts.length - 1];
       json(res, 200, {
         ok: true,
@@ -316,7 +387,7 @@ const server = createServer(async (req, res) => {
       }
       json(res, 200, {
         ok: true,
-        post,
+        post: withPetInfo([post])[0],
         comments: social.listComments(postId, 100),
       });
       return;
@@ -330,7 +401,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 20)));
-      json(res, 200, { ok: true, posts: social.listByPetRoot(rootTxid, limit) });
+      json(res, 200, { ok: true, posts: withPetInfo(social.listByPetRoot(rootTxid, limit)) });
       return;
     }
 

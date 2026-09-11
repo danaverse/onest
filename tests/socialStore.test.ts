@@ -209,6 +209,26 @@ describe('SocialStore', () => {
     }
   });
 
+  it('binds and looks up user profiles', () => {
+    const { store, close } = freshStore();
+    try {
+      const bound = store.bindUser({ installId: 'install-1', address: 'ecash:QqAbC' });
+      expect(bound.address).toBe('ecash:qqabc');
+      expect(store.getUser('install-1')?.address).toBe('ecash:qqabc');
+      expect(store.getUserByAddress('ECASH:QQABC')?.installId).toBe('install-1');
+      expect(store.getUser('missing')).toBeNull();
+
+      const rebound = store.bindUser({
+        installId: 'install-1',
+        address: 'ecash:newaddress',
+      });
+      expect(rebound.createdAt).toBe(bound.createdAt);
+      expect(store.getUser('install-1')?.address).toBe('ecash:newaddress');
+    } finally {
+      close();
+    }
+  });
+
   it('persists the ingest cursor', () => {
     const { sqlite, db } = openSocialDb(':memory:');
     const store = new SocialStore(sqlite, db);

@@ -32,6 +32,13 @@ Social feed:
 - `POST /api/posts/:id/remove { installId }` — Author soft-delete
 - `POST /api/comments/:id/remove { installId }` — Author soft-delete
 
+User profiles (identity binding):
+
+- `POST /api/users/bind { installId, address, message, signature }` — Verify the recoverable signature (`verifyMsg`), then upsert `install_id ↔ address` in the `users` table
+- `GET /api/users/:installId` — Look up the bound wallet address
+
+Feed, trending, post detail and pet-post responses include `pet: { name, species }` when the pet profile is indexed.
+
 ## Ingest
 
 `syncTokenHistory()` walks the PAW token history with two cursors (`ingest_state` in SQLite):

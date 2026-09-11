@@ -1,17 +1,27 @@
 import { useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
-import { encodeAnimalProfileNote } from '../../../../src/offering/animalProfileFields.js';
-import { fetchChallenge, submitMinedOffer, completeOfferBurn } from '../lib/offerApi.js';
-import { mineInWorker } from '../lib/mineRunner.js';
+import {
+  encodeAnimalProfileNote,
+  type AnimalProfileFields,
+} from '../../../../src/offering/animalProfileFields.js';
+import { PAW_LISTING_FEE_ATOMS } from '../../../../src/params/pawMint.js';
+import { createPetProfileWithWallet } from '../lib/profileCreation.js';
+import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { setOfferingBlocksPwaReload } from '../lib/pwaReloadGate.js';
+import { useWallet } from '../wallet/WalletContext.js';
+
+const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
+const MIN_PROFILE_XEC_SATS = 2_000n;
 
 export function AnimalProfileModal(props: {
   open: boolean;
   onClose: () => void;
   parentBurnTxid?: string;
   onSuccess?: (txid: string) => void;
+  onRequestWallet?: () => void;
 }) {
   const { t } = useLocale();
+  const userWallet = useWallet();
   const [name, setName] = useState('');
   const [species, setSpecies] = useState<'dog' | 'cat' | 'bird' | 'rabbit' | 'horse' | 'other'>('dog');
   const [breed, setBreed] = useState('');
@@ -24,6 +34,8 @@ export function AnimalProfileModal(props: {
   const [successTxid, setSuccessTxid] = useState<string | null>(null);
 
   if (!props.open) return null;
+
+  const isCreate = !props.parentBurnTxid;
 
   function resetForm() {
     setName('');
@@ -49,70 +61,81 @@ export function AnimalProfileModal(props: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (props.parentBurnTxid ? !note.trim() : !name.trim()) return;
+    if (isCreate ? !name.trim() : !note.trim()) return;
+    if (isCreate) {
+      await handleCreateProfile();
+    } else {
+      await handleSponsoredTribute();
+    }
+  }
+
+  async function handleCreateProfile() {
+    if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
+      setErr(t('userProfileRequired'));
+      props.onRequestWallet?.();
+      return;
+    }
+    const paw = userWallet.balances?.pawAtoms ?? 0n;
+    const xec = userWallet.balances?.xecSats ?? 0n;
+    if (paw < MIN_PROFILE_PAW) {
+      setErr(t('needPawForProfile', { atoms: Number(MIN_PROFILE_PAW) }));
+      return;
+    }
+    if (xec < MIN_PROFILE_XEC_SATS) {
+      setErr(t('needXecForProfile'));
+      return;
+    }
 
     setBusy(true);
     setErr(null);
     setSuccessTxid(null);
     setOfferingBlocksPwaReload(true);
-
     try {
-      const packedNote = props.parentBurnTxid
-        ? note.trim()
-        : encodeAnimalProfileNote({
-            species,
-            name: name.trim(),
-            breed: breed.trim(),
-            birthDate: birthDate.trim(),
-            passingDate: passingDate.trim(),
-            note: note.trim(),
-            location: '',
-            memorialPlace: '',
-            relationshipType: '',
-            relatedTxid: '',
-            relationships: [],
-            kind: 'memorial',
-            dateCalendar: 'solar',
-          });
+      setProgress(t('creatingProfileWallet'));
+      const fields: AnimalProfileFields = {
+        species,
+        name: name.trim(),
+        breed: breed.trim(),
+        birthDate: birthDate.trim(),
+        passingDate: passingDate.trim(),
+        note: note.trim(),
+        location: '',
+        memorialPlace: '',
+        relationshipType: '',
+        relatedTxid: '',
+        relationships: [],
+        kind: 'memorial',
+        dateCalendar: 'solar',
+      };
+      const { txid } = await createPetProfileWithWallet({
+        wallet: userWallet.wallet,
+        fields,
+      });
+      setSuccessTxid(txid);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error creating profile');
+    } finally {
+      setOfferingBlocksPwaReload(false);
+      setBusy(false);
+      setProgress(null);
+    }
+  }
 
-      setProgress('Requesting PoW challenge...');
-      const challenge = await fetchChallenge({
-        note: packedNote,
+  async function handleSponsoredTribute() {
+    setBusy(true);
+    setErr(null);
+    setSuccessTxid(null);
+    setOfferingBlocksPwaReload(true);
+    try {
+      const result = await runSponsoredOffer({
+        kind: 'memorial',
+        note: note.trim(),
         parentBurnTxid: props.parentBurnTxid,
+        onProgress: setProgress,
       });
-
-      setProgress(`Mining PoW (${challenge.bits} bits)...`);
-      const mined = await mineInWorker({
-        powPrefixHex: challenge.powPrefixHex,
-        bits: challenge.bits,
-        nonceLength: challenge.nonceLength,
-        onProgress: p => {
-          setProgress(`Mining PoW: ${p.attempts.toLocaleString()} attempts (${p.hashrateHps.toLocaleString()} H/s)`);
-        },
-      });
-
-      setProgress('Submitting mined offer to desk...');
-      const submitted = await submitMinedOffer({
-        challengeId: challenge.challengeId,
-        nonceHex: mined.nonceHex,
-        powMs: mined.elapsedMs,
-        powAttempts: mined.attempts,
-      });
-
-      let burnTxid = submitted.burnTxid;
-      if (submitted.burnPending && submitted.burnToken) {
-        setProgress('Dedicating on-chain paw-print burn...');
-        const burned = await completeOfferBurn({
-          remintTxid: submitted.remintTxid,
-          burnToken: submitted.burnToken,
-        });
-        burnTxid = burned.burnTxid;
-      }
-
-      const finalTxid = burnTxid || submitted.remintTxid;
-      setSuccessTxid(finalTxid);
-    } catch (e: any) {
-      setErr(e?.message || 'Error creating profile');
+      setSuccessTxid(result.burnTxid);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error creating profile');
     } finally {
       setOfferingBlocksPwaReload(false);
       setBusy(false);
@@ -239,7 +262,11 @@ export function AnimalProfileModal(props: {
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
 
-            {!busy && <p className="pow-hint">{t('powHint')}</p>}
+            {!busy && (
+              <p className="pow-hint">
+                {isCreate ? t('profileFeeHint', { atoms: Number(PAW_LISTING_FEE_ATOMS) }) : t('powHint')}
+              </p>
+            )}
 
             <div className="modal-actions">
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">
