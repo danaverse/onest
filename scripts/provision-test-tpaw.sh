@@ -25,6 +25,16 @@ if [[ -z "${TEST_DESK_SEEDS:-}" && -z "${MINT_MNEMONIC:-}" && -z "${GENESIS_MNEM
 fi
 
 export PATH="$ROOT/node_modules/.bin:/usr/local/bin:/usr/bin:${PATH:-}"
+if [[ ! -x /usr/local/lib/nodejs-22/bin/node ]]; then
+  echo "provision-test-tpaw: installing Node 22 beside system Node (WLotus stays on /usr/bin/node)"
+  curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz -o /tmp/node-v22.14.0-linux-x64.tar.xz
+  mkdir -p /usr/local/lib/nodejs-22
+  tar -xJf /tmp/node-v22.14.0-linux-x64.tar.xz -C /usr/local/lib/nodejs-22 --strip-components=1
+  rm -f /tmp/node-v22.14.0-linux-x64.tar.xz
+fi
+if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
+  export PATH="/usr/local/lib/nodejs-22/bin:$PATH"
+fi
 chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
 
 echo "provision-test-tpaw: inspecting desk address (no broadcast)..."
