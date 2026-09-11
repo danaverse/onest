@@ -99,6 +99,9 @@ export type MessageKey =
   | 'creatingProfileWallet'
   | 'loading'
   | 'noPagesYet'
+  | 'themeAppearance'
+  | 'themeLight'
+  | 'themeDark'
   | 'openUserProfile'
   | 'copyAddress'
   | 'depositHint'
@@ -209,6 +212,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     creatingProfileWallet: 'Creating your animal profile from your wallet...',
     loading: 'Loading...',
     noPagesYet: 'No pet pages yet. Create the first animal profile to start sharing moments.',
+    themeAppearance: 'Appearance',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     openUserProfile: 'Open user profile',
     copyAddress: 'Copy address',
     depositHint:
@@ -319,6 +325,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     creatingProfileWallet: 'Đang tạo hồ sơ thú cưng từ ví...',
     loading: 'Đang tải...',
     noPagesYet: 'Chưa có trang thú cưng nào. Hãy tạo hồ sơ đầu tiên để bắt đầu chia sẻ khoảnh khắc.',
+    themeAppearance: 'Giao diện',
+    themeLight: 'Sáng',
+    themeDark: 'Tối',
     openUserProfile: 'Mở hồ sơ người dùng',
     copyAddress: 'Sao chép địa chỉ',
     depositHint:
@@ -425,6 +434,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     creatingProfileWallet: '正在用钱包创建宠物档案...',
     loading: '加载中...',
     noPagesYet: '还没有宠物主页。创建第一个宠物档案，开始分享回忆吧。',
+    themeAppearance: '外观',
+    themeLight: '浅色',
+    themeDark: '深色',
     openUserProfile: '打开用户资料',
     copyAddress: '复制地址',
     depositHint: '创建宠物档案前，请先向此地址发送 XEC（网络费）和 PAW（1 销毁 + 6 atom 上架费）。',
