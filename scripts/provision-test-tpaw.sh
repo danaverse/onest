@@ -120,24 +120,27 @@ install -m 755 "$ROOT/deploy/contabo/run-dana-index.sh" "$REPO_DEST/deploy/conta
 install -m 644 "$ROOT/deploy/contabo/onest-mint-api.service" /etc/systemd/system/onest-mint-api.service
 install -m 644 "$ROOT/deploy/contabo/onest-dana-index.service" /etc/systemd/system/onest-dana-index.service
 
-if [[ -f "$NGINX_SRC" ]]; then
-  install -m 644 "$NGINX_SRC" "$NGINX_DEST"
-  nginx -t
-  systemctl reload nginx
-fi
-
+# Start Onest on 9787/9788 before flipping nginx so test.onest.pet never 502s
+# onto empty ports. WLotus stays on 8787/8788.
 systemctl daemon-reload
 systemctl enable --now onest-mint-api onest-dana-index
 systemctl restart onest-mint-api onest-dana-index
 
 echo "provision-test-tpaw: waiting for mint-api on :${MINT_PORT}..."
-for i in 1 2 3 4 5 6 7 8 9 10; do
+healthy=0
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
   if curl -fsS "http://127.0.0.1:${MINT_PORT}/health" | grep -q onest-mint-api; then
     echo "provision-test-tpaw: mint-api healthy"
+    healthy=1
     break
   fi
   sleep 2
 done
+if [[ "$healthy" -ne 1 ]]; then
+  echo "provision-test-tpaw: mint-api did not become healthy; not flipping nginx" >&2
+  journalctl -u onest-mint-api -n 80 --no-pager >&2 || true
+  exit 1
+fi
 
 STATUS="$(curl -fsS "http://127.0.0.1:${MINT_PORT}/api/status" || true)"
 echo "$STATUS" | node -e '
@@ -170,6 +173,13 @@ WEB_DEST="${WEB_DEST:-/var/www/onest-test}"
 mkdir -p "$WEB_DEST"
 rsync -a --delete "$ROOT/apps/web/dist/" "$WEB_DEST/"
 chown -R deploy:deploy "$WEB_DEST" 2>/dev/null || true
+
+if [[ -f "$NGINX_SRC" ]]; then
+  echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
+  install -m 644 "$NGINX_SRC" "$NGINX_DEST"
+  nginx -t
+  systemctl reload nginx
+fi
 
 echo "provision-test-tpaw: done. tPAW is live; WLotus remains on :8787/:8788 for test.wlotus.org."
 echo "TOKEN_ID=${TOKEN_ID}"
