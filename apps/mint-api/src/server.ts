@@ -28,7 +28,7 @@ import {
   WaitNotElapsedError,
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
-import { createClientMintChallenge, submitClientMint } from './clientMint.js';
+import { createPaidProfile, profileFeeInfo } from './paidProfile.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -115,34 +115,21 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/mint/client/challenge') {
-      const body = await readJsonBody(req);
-      const installId = requireInstallId(body.installId);
-      const fuelOutIdx = Number(body.fuelOutIdx);
-      if (!Number.isInteger(fuelOutIdx) || fuelOutIdx < 0) {
-        json(res, 400, { error: 'valid fuelOutIdx required' });
-        return;
-      }
-      const challenge = await createClientMintChallenge({
-        installId,
-        address: String(body.address || ''),
-        pkHex: String(body.pkHex || ''),
-        fuelTxid: String(body.fuelTxid || ''),
-        fuelOutIdx,
-      });
-      json(res, 200, challenge);
+    if (req.method === 'GET' && url.pathname === '/api/profile/fee') {
+      json(res, 200, await profileFeeInfo());
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/mint/client/submit') {
+    if (req.method === 'POST' && url.pathname === '/api/profile/create') {
       const body = await readJsonBody(req);
       const installId = requireInstallId(body.installId);
-      const result = await submitClientMint({
+      const result = await createPaidProfile({
         installId,
-        challengeId: String(body.challengeId || ''),
-        nonceHex: String(body.nonceHex || ''),
-        batonSigHex: String(body.batonSigHex || ''),
-        fuelSigHex: String(body.fuelSigHex || ''),
+        address: String(body.address || ''),
+        paymentTxid: String(body.paymentTxid || ''),
+        note: typeof body.note === 'string' ? body.note : '',
+        parentBurnTxid:
+          typeof body.parentBurnTxid === 'string' ? body.parentBurnTxid : undefined,
       });
       json(res, 200, result);
       return;

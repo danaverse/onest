@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
 import {
   encodeAnimalProfileNote,
@@ -6,14 +6,17 @@ import {
 } from '../../../../src/offering/animalProfileFields.js';
 import { PAW_LISTING_FEE_ATOMS } from '../../../../src/params/pawMint.js';
 import { createPetProfileWithWallet } from '../lib/profileCreation.js';
+import {
+  createPaidProfileWithXec,
+  fetchProfileFee,
+  type ProfileFeeInfo,
+} from '../lib/paidProfile.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { setOfferingBlocksPwaReload } from '../lib/pwaReloadGate.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
 const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
-/** Enough XEC to split a fuel UTXO and pay the remint fees. */
-const MIN_MINT_XEC_SATS = 12_000n;
 
 export function AnimalProfileModal(props: {
   open: boolean;
@@ -34,10 +37,44 @@ export function AnimalProfileModal(props: {
   const [progress, setProgress] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [successTxid, setSuccessTxid] = useState<string | null>(null);
+  const [profileFee, setProfileFee] = useState<ProfileFeeInfo | null>(null);
+
+  useEffect(() => {
+    if (!props.open || props.parentBurnTxid) return;
+    let cancelled = false;
+    fetchProfileFee()
+      .then(fee => {
+        if (!cancelled) setProfileFee(fee);
+      })
+      .catch(() => {
+        /* fall back to the generic button label */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open, props.parentBurnTxid]);
 
   if (!props.open) return null;
 
   const isCreate = !props.parentBurnTxid;
+
+  function buildProfileFields(): AnimalProfileFields {
+    return {
+      species,
+      name: name.trim(),
+      breed: breed.trim(),
+      birthDate: birthDate.trim(),
+      passingDate: passingDate.trim(),
+      note: note.trim(),
+      location: '',
+      memorialPlace: '',
+      relationshipType: '',
+      relatedTxid: '',
+      relationships: [],
+      kind: 'memorial',
+      dateCalendar: 'solar',
+    };
+  }
 
   function resetForm() {
     setName('');
@@ -94,24 +131,9 @@ export function AnimalProfileModal(props: {
     setOfferingBlocksPwaReload(true);
     try {
       setProgress(t('creatingProfileWallet'));
-      const fields: AnimalProfileFields = {
-        species,
-        name: name.trim(),
-        breed: breed.trim(),
-        birthDate: birthDate.trim(),
-        passingDate: passingDate.trim(),
-        note: note.trim(),
-        location: '',
-        memorialPlace: '',
-        relationshipType: '',
-        relatedTxid: '',
-        relationships: [],
-        kind: 'memorial',
-        dateCalendar: 'solar',
-      };
       const { txid } = await createPetProfileWithWallet({
         wallet: userWallet.wallet,
-        fields,
+        fields: buildProfileFields(),
       });
       setSuccessTxid(txid);
     } catch (e) {
@@ -123,7 +145,7 @@ export function AnimalProfileModal(props: {
     }
   }
 
-  async function handleMintPaw() {
+  async function handlePayXec() {
     if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
       setErr(t('userProfileRequired'));
       props.onRequestWallet?.();
@@ -131,22 +153,25 @@ export function AnimalProfileModal(props: {
     }
     setBusy(true);
     setErr(null);
+    setSuccessTxid(null);
     setProgress(null);
     setOfferingBlocksPwaReload(true);
     try {
-      const { mintPawFromWallet } = await import('../lib/mintPaw.js');
-      await mintPawFromWallet({
+      const note = encodeAnimalProfileNote(buildProfileFields());
+      const { burnTxid } = await createPaidProfileWithXec({
         wallet: userWallet.wallet,
+        note,
         onProgress: setProgress,
       });
+      setSuccessTxid(burnTxid);
       await userWallet.refresh();
-      setProgress(t('mintDone'));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Mint failed';
-      setErr(msg === 'MINT_NEED_XEC' ? t('mintNeedXec') : msg);
+      const msg = e instanceof Error ? e.message : 'Profile payment failed';
+      setErr(msg === 'PAY_NEED_XEC' ? t('payNeedXec') : msg);
     } finally {
       setOfferingBlocksPwaReload(false);
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -311,15 +336,16 @@ export function AnimalProfileModal(props: {
                   )}
                   {userWallet.status === 'unlocked' &&
                     userWallet.balances != null &&
-                    userWallet.balances.pawAtoms < MIN_PROFILE_PAW &&
-                    userWallet.balances.xecSats >= MIN_MINT_XEC_SATS && (
+                    userWallet.balances.pawAtoms < MIN_PROFILE_PAW && (
                       <button
                         type="button"
                         className="btn-primary"
                         disabled={busy}
-                        onClick={handleMintPaw}
+                        onClick={handlePayXec}
                       >
-                        {t('mintPawFromXec')}
+                        {profileFee
+                          ? t('payToCreateWithXec', { xec: profileFee.xec })
+                          : t('payToCreate')}
                       </button>
                     )}
                   <button

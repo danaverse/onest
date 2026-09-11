@@ -1,0 +1,61 @@
+/**
+ * Flat XEC fee for desk-built pet profiles.
+ *
+ * When the wallet has no PAW, the user pays a flat XEC fee and the desk spends
+ * 7 PAW from inventory — 1 atom burned for the memorial, 6 atoms listing fee
+ * retained. No remint. Default: 20 XEC = 2,000 sats.
+ *
+ * Margin math (per profile, atoms valued at the 1 XEC/atom reference):
+ *   income             2,000 sats (20 XEC)
+ *   7 PAW atoms        -700 sats (7 XEC: 1 burned + 6 listing retained)
+ *   burn tx fee        ~300–600 sats at 1 sat/byte (token input + postage + OP_RETURN)
+ *   -> desk margin     ~700–1,000 sats (~35–50% of revenue)
+ */
+
+export const DEFAULT_PROFILE_XEC_FEE = 20n;
+export const PROFILE_FEE_MIN_XEC = 1n;
+export const PROFILE_FEE_MAX_XEC = 10_000n;
+
+export function resolveProfileXecFee(
+  raw: string | number | bigint | null | undefined,
+): bigint {
+  if (raw == null || String(raw).trim() === '') return DEFAULT_PROFILE_XEC_FEE;
+  try {
+    const n = BigInt(String(raw).trim());
+    if (n < PROFILE_FEE_MIN_XEC) return DEFAULT_PROFILE_XEC_FEE;
+    return n > PROFILE_FEE_MAX_XEC ? PROFILE_FEE_MAX_XEC : n;
+  } catch {
+    return DEFAULT_PROFILE_XEC_FEE;
+  }
+}
+
+export function xecToSats(xec: bigint): bigint {
+  return xec * 100n;
+}
+
+/** Human XEC string (1 XEC = 100 sats). */
+export function xecFromSats(sats: bigint): string {
+  const whole = sats / 100n;
+  const frac = sats % 100n;
+  return frac === 0n
+    ? whole.toString()
+    : `${whole}.${frac.toString().padStart(2, '0')}`.replace(/0+$/, '');
+}
+
+export interface TxOutputLike {
+  sats: bigint;
+  outputScript: string;
+}
+
+/** Sum outputs paying a specific locking script (hex, case-insensitive). */
+export function sumOutputsToScript(
+  outputs: readonly TxOutputLike[],
+  scriptHex: string,
+): bigint {
+  const want = scriptHex.trim().toLowerCase();
+  let sum = 0n;
+  for (const out of outputs) {
+    if (out.outputScript?.toLowerCase() === want) sum += out.sats;
+  }
+  return sum;
+}
