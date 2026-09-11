@@ -12,8 +12,8 @@ import { useWallet } from '../wallet/WalletContext.js';
 
 const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
-/** Enough XEC to split a fuel UTXO and pay the remint fees. */
-const MIN_MINT_XEC_SATS = 12_000n;
+/** Enough XEC to cover the quoted swap plus network fees. */
+const MIN_BUY_XEC_SATS = 2_000n;
 
 export function AnimalProfileModal(props: {
   open: boolean;
@@ -123,7 +123,7 @@ export function AnimalProfileModal(props: {
     }
   }
 
-  async function handleMintPaw() {
+  async function handleBuyPaw() {
     if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
       setErr(t('userProfileRequired'));
       props.onRequestWallet?.();
@@ -134,16 +134,17 @@ export function AnimalProfileModal(props: {
     setProgress(null);
     setOfferingBlocksPwaReload(true);
     try {
-      const { mintPawFromWallet } = await import('../lib/mintPaw.js');
-      await mintPawFromWallet({
+      const { buyPawWithXec } = await import('../lib/exchange.js');
+      await buyPawWithXec({
         wallet: userWallet.wallet,
+        pawAtoms: MIN_PROFILE_PAW,
         onProgress: setProgress,
       });
       await userWallet.refresh();
-      setProgress(t('mintDone'));
+      setProgress(t('buyDone'));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Mint failed';
-      setErr(msg === 'MINT_NEED_XEC' ? t('mintNeedXec') : msg);
+      const msg = e instanceof Error ? e.message : 'Exchange failed';
+      setErr(msg === 'BUY_NEED_XEC' ? t('buyNeedXec') : msg);
     } finally {
       setOfferingBlocksPwaReload(false);
       setBusy(false);
@@ -312,14 +313,14 @@ export function AnimalProfileModal(props: {
                   {userWallet.status === 'unlocked' &&
                     userWallet.balances != null &&
                     userWallet.balances.pawAtoms < MIN_PROFILE_PAW &&
-                    userWallet.balances.xecSats >= MIN_MINT_XEC_SATS && (
+                    userWallet.balances.xecSats >= MIN_BUY_XEC_SATS && (
                       <button
                         type="button"
                         className="btn-primary"
                         disabled={busy}
-                        onClick={handleMintPaw}
+                        onClick={handleBuyPaw}
                       >
-                        {t('mintPawFromXec')}
+                        {t('buyPawWithXec', { atoms: Number(MIN_PROFILE_PAW) })}
                       </button>
                     )}
                   <button

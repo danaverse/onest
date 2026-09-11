@@ -28,7 +28,13 @@ import {
   WaitNotElapsedError,
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
-import { createClientMintChallenge, submitClientMint } from './clientMint.js';
+import {
+  createExchangeOrder,
+  exchangeRateInfo,
+  exchangeStore,
+  publicExchangeOrder,
+  startExchangeWatcher,
+} from './deskExchange.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -115,36 +121,42 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/mint/client/challenge') {
-      const body = await readJsonBody(req);
-      const installId = requireInstallId(body.installId);
-      const fuelOutIdx = Number(body.fuelOutIdx);
-      if (!Number.isInteger(fuelOutIdx) || fuelOutIdx < 0) {
-        json(res, 400, { error: 'valid fuelOutIdx required' });
-        return;
-      }
-      const challenge = await createClientMintChallenge({
-        installId,
-        address: String(body.address || ''),
-        pkHex: String(body.pkHex || ''),
-        fuelTxid: String(body.fuelTxid || ''),
-        fuelOutIdx,
-      });
-      json(res, 200, challenge);
+    if (req.method === 'GET' && url.pathname === '/api/exchange/rate') {
+      json(res, 200, exchangeRateInfo());
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/mint/client/submit') {
+    if (req.method === 'POST' && url.pathname === '/api/exchange/order') {
       const body = await readJsonBody(req);
       const installId = requireInstallId(body.installId);
-      const result = await submitClientMint({
+      let pawAtoms: bigint;
+      try {
+        pawAtoms = BigInt(String(body.pawAtoms ?? '').trim());
+      } catch {
+        json(res, 400, { error: 'pawAtoms must be a positive integer' });
+        return;
+      }
+      const quote = await createExchangeOrder({
         installId,
-        challengeId: String(body.challengeId || ''),
-        nonceHex: String(body.nonceHex || ''),
-        batonSigHex: String(body.batonSigHex || ''),
-        fuelSigHex: String(body.fuelSigHex || ''),
+        address: String(body.address || ''),
+        pawAtoms,
       });
-      json(res, 200, result);
+      json(res, 200, quote);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/exchange/order/')) {
+      const id = decodeURIComponent(
+        url.pathname.slice('/api/exchange/order/'.length),
+      )
+        .trim()
+        .toLowerCase();
+      const order = exchangeStore.get(id);
+      if (!order) {
+        json(res, 404, { error: 'order not found' });
+        return;
+      }
+      json(res, 200, { ok: true, order: publicExchangeOrder(order) });
       return;
     }
 
@@ -293,4 +305,10 @@ try {
 server.listen(PORT, () => {
   console.log(`Onest mint-api listening on :${PORT} startedAt=${STARTED_AT}`);
   startMorningReminderLoop();
+  if (
+    process.env.TOKEN_ID?.trim() ||
+    process.env.VITE_PRAYER_TOKEN_ID?.trim()
+  ) {
+    startExchangeWatcher();
+  }
 });

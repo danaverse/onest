@@ -93,9 +93,6 @@ export interface MooreTipRemintPrepared {
   powPrefix: Uint8Array;
   preimageHex: string;
   powPrefixHex: string;
-  /** BIP143 sighash preimage for the fuel (P2PKH) input. */
-  fuelPreimage: Uint8Array;
-  fuelPreimageHex: string;
 }
 
 export type WLotusCovenantRemintPrepared = MooreTipRemintPrepared;
@@ -171,9 +168,6 @@ async function prepareMooreTipRemint(opts: {
     .inputAt(0)
     .sigHashPreimage(ALL_BIP143, MOORE_TIP_CODESEP_INDEX).bytes;
   const powPrefix = sha256(preimage);
-  const fuelPreimage = UnsignedTx.fromTx(unsigned)
-    .inputAt(1)
-    .sigHashPreimage(ALL_BIP143).bytes;
 
   return {
     contract,
@@ -191,83 +185,6 @@ async function prepareMooreTipRemint(opts: {
     powPrefix,
     preimageHex: toHex(preimage),
     powPrefixHex: toHex(powPrefix),
-    fuelPreimage,
-    fuelPreimageHex: toHex(fuelPreimage),
-  };
-}
-
-/**
- * Build a signed remint tx from external signatures (client-side keys).
- * The desk never holds the user's key: it verifies PoW, assembles the
- * covenant unlock from the provided 65-byte sig + 64-byte data sig and the
- * P2PKH fuel scriptSig, then the caller broadcasts.
- */
-export function assembleMooreTipRemintTxWithSignatures(opts: {
-  prepared: MooreTipRemintPrepared;
-  nonce: Uint8Array;
-  batonSig65: Uint8Array;
-  ds64: Uint8Array;
-  fuelScriptSig: Uint8Array;
-}): { txHex: string; tip: MooreTipState; locktime: number; mintAtoms: string } {
-  const { prepared, nonce, batonSig65, ds64, fuelScriptSig } = opts;
-  if (nonce.length !== MOORE_TIP_NONCE_LENGTH) {
-    throw new Error(
-      `nonce must be ${MOORE_TIP_NONCE_LENGTH} bytes, got ${nonce.length}`,
-    );
-  }
-  if (
-    !verifyPowBits({
-      preimage: prepared.preimage,
-      nonce,
-      bits: prepared.tip.bits,
-      commit: MOORE_TIP_POW_COMMIT,
-    })
-  ) {
-    throw new Error('PoW nonce does not meet difficulty');
-  }
-  if (batonSig65.length !== 65) {
-    throw new Error(`Sig must be 65 bytes, got ${batonSig65.length}`);
-  }
-  if (ds64.length !== 64) {
-    throw new Error(`DataSig must be 64 bytes, got ${ds64.length}`);
-  }
-
-  const { contract, baton, fuel, locktime, tip, nextContract } = prepared;
-  const unlock = contract.instance.challenges.remint({
-    nonce: Buffer.from(nonce),
-    s: Buffer.from(batonSig65),
-    ds: Buffer.from(ds64),
-    minerPk: Buffer.from(prepared.miner.pk),
-    preimage: Buffer.from(prepared.preimage),
-    nextRedeem: prepared.nextRedeem,
-  }) as Buffer;
-
-  const tx = new Tx({
-    locktime,
-    inputs: [
-      {
-        prevOut: baton.outpoint,
-        sequence: LOCKTIME_ENABLE_SEQUENCE,
-        script: new Script(new Uint8Array(unlock)),
-      },
-      {
-        prevOut: fuel.outpoint,
-        sequence: LOCKTIME_ENABLE_SEQUENCE,
-        script: new Script(fuelScriptSig),
-      },
-    ],
-    outputs: [
-      { sats: 0n, script: prepared.opReturn },
-      { sats: prepared.dust, script: prepared.minerP2pkh },
-      { sats: prepared.dust, script: nextContract.p2shScript },
-    ],
-  });
-
-  return {
-    txHex: toHex(tx.ser()),
-    tip,
-    locktime,
-    mintAtoms: contract.params.mintAtoms.toString(),
   };
 }
 
