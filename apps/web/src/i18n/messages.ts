@@ -44,7 +44,9 @@ export type MessageKey =
   | 'voteUp'
   | 'voteDown'
   | 'voteTitle'
+  | 'votePawHint'
   | 'voteFeeHint'
+  | 'voteNeedPaw'
   | 'voteNeedXec'
   | 'voteCounting'
   | 'votingStart'
@@ -158,8 +160,11 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteUp: 'Vote',
     voteDown: 'Downvote',
     voteTitle: 'Vote on this moment',
+    votePawHint:
+      'Burn 1 PAW from your wallet — you only pay the network fee. No listing fee.',
     voteFeeHint:
       'You pay {xec} XEC — burns 1 PAW. No listing fee, no mining wait.',
+    voteNeedPaw: 'You need at least 1 PAW to vote from your wallet.',
     voteNeedXec:
       'You need a little more XEC to vote. Send XEC to your wallet, then try again.',
     voteCounting: 'Counting your vote...',
@@ -278,8 +283,11 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteUp: 'Bình chọn lên',
     voteDown: 'Bình chọn xuống',
     voteTitle: 'Bình chọn cho khoảnh khắc này',
+    votePawHint:
+      'Đốt 1 PAW từ ví của bạn — chỉ trả phí mạng. Không phí niêm yết.',
     voteFeeHint:
       'Bạn trả {xec} XEC — đốt 1 PAW. Không phí niêm yết, không chờ đào.',
+    voteNeedPaw: 'Bạn cần ít nhất 1 PAW để bình chọn từ ví.',
     voteNeedXec:
       'Bạn cần thêm một ít XEC để bình chọn. Hãy gửi XEC vào ví rồi thử lại.',
     voteCounting: 'Đang ghi nhận bình chọn...',
@@ -397,7 +405,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteUp: '点赞',
     voteDown: '点踩',
     voteTitle: '为这一刻投票',
+    votePawHint: '从你的钱包销毁 1 PAW——只需支付网络费，无上架费。',
     voteFeeHint: '支付 {xec} XEC——销毁 1 PAW。无上架费，无需等待挖矿。',
+    voteNeedPaw: '从钱包投票至少需要 1 PAW。',
     voteNeedXec: 'XEC 不足，请先向钱包充值再投票。',
     voteCounting: '正在计入投票...',
     votingStart: '正在准备投票...',

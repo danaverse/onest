@@ -4,9 +4,22 @@
  * payment for the same post + direction.
  */
 import type { Wallet } from 'ecash-wallet';
-import { MINT_API_BASE, getOrCreateInstallId } from './config.js';
+import {
+  MINT_API_BASE,
+  PAW_TOKEN_ID,
+  getOrCreateInstallId,
+} from './config.js';
+import { notifyBurn } from './profileCreation.js';
 
 const PENDING_PAYMENT_KEY = 'onest.pendingVotePayment';
+
+/** Wallet PAW path: the burn tx only needs a small XEC postage/fee reserve. */
+export const MIN_VOTE_PAW_XEC_SATS = 1_000n;
+/**
+ * XEC path fallback buffer (default 6 XEC fee + 500 sats headroom) used
+ * before the fee quote arrives; the modal prefers the live quote.
+ */
+export const MIN_VOTE_XEC_SATS = 1_100n;
 
 interface WalletUtxoLike {
   sats: bigint;
@@ -67,6 +80,38 @@ function clearPendingPayment(): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Spend the wallet's own PAW: burn 1 atom with the DANA v3 vote payload.
+ * No desk fee — XEC only covers the network fee. The burn sender is the
+ * voter, so the index attributes the vote on-chain.
+ */
+export async function createVoteWithPaw(opts: {
+  wallet: Wallet;
+  postId: string;
+  direction: VoteDirection;
+  onProgress?: (message: string) => void;
+}): Promise<{ burnTxid: string; direction: VoteDirection }> {
+  opts.onProgress?.('Burning 1 PAW for your vote...');
+  // Lazy: keeps ecash-lib/wasm out of the main bundle.
+  const { burnOnePaw } = await import('../../../../src/offering/burnPaw.js');
+  const { encodeVotePushdata } = await import(
+    '../../../../src/social/danaSocial.js'
+  );
+  const result = await burnOnePaw({
+    wallet: opts.wallet,
+    tokenId: PAW_TOKEN_ID,
+    pushdata: encodeVotePushdata({
+      direction: opts.direction,
+      postHash: opts.postId,
+    }),
+    burnAtoms: 1n,
+    autoSelectUtxos: true,
+  });
+  notifyBurn(result.txid);
+  await opts.wallet.sync().catch(() => undefined);
+  return { burnTxid: result.txid, direction: opts.direction };
 }
 
 export async function fetchVoteFee(): Promise<VoteFee> {
