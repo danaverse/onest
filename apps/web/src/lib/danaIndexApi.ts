@@ -41,6 +41,15 @@ export async function fetchTrendingProfiles(limit = 8): Promise<IndexMemorialGro
   return data.trending ?? [];
 }
 
+/** Newest pet profiles by creation time (root burn), not latest activity. */
+export async function fetchRecentProfiles(limit = 12): Promise<IndexMemorialGroup[]> {
+  const base = DANA_INDEX_BASE || '/index-api';
+  const res = await fetch(`${base}/api/profiles/recent?limit=${limit}`);
+  if (!res.ok) throw new Error(`Recent profiles HTTP ${res.status}`);
+  const data = await res.json();
+  return data.profiles ?? [];
+}
+
 export async function searchProfiles(query: string, limit = 20): Promise<IndexMemorialGroup[]> {
   const base = DANA_INDEX_BASE || '/index-api';
   const res = await fetch(`${base}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`);

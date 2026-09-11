@@ -80,6 +80,91 @@ describe('BurnStore', () => {
     expect(searchRes[0]!.originalBurnTxid).toBe(rootTxid);
   });
 
+  it('lists recently created profiles by root creation time', () => {
+    const store = new BurnStore(testStorePath);
+    const oldProfile = 'a'.repeat(64);
+    const newProfile = 'b'.repeat(64);
+    const oldTribute = 'c'.repeat(64);
+    const legacyRoot = 'd'.repeat(64);
+
+    const profileNote = (name: string) =>
+      encodeAnimalProfileNote({
+        species: 'dog',
+        name,
+        note: '',
+        breed: '',
+        birthDate: '',
+        passingDate: '',
+        location: '',
+        memorialPlace: '',
+        relationshipType: '',
+        relatedTxid: '',
+        relationships: [],
+        kind: 'memorial',
+        dateCalendar: 'solar',
+      });
+
+    store.insert({
+      burnTxid: oldProfile,
+      tokenId: 't'.repeat(64),
+      note: profileNote('Old Friend'),
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: oldProfile,
+      blockHeight: 1,
+      blockTimestamp: 1700000000,
+      timeFirstSeen: new Date().toISOString(),
+      burnAtoms: '1',
+    });
+    store.insert({
+      burnTxid: newProfile,
+      tokenId: 't'.repeat(64),
+      note: profileNote('New Friend'),
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: newProfile,
+      blockHeight: 2,
+      blockTimestamp: 1700000100,
+      timeFirstSeen: new Date().toISOString(),
+      burnAtoms: '1',
+    });
+    /* A fresh tribute bumps the old profile's activity, not its creation order. */
+    store.insert({
+      burnTxid: oldTribute,
+      tokenId: 't'.repeat(64),
+      note: 'Rest well 🐾',
+      offeringId: 'paw',
+      version: 2,
+      parentBurnTxid: oldProfile,
+      originalBurnTxid: oldProfile,
+      blockHeight: 3,
+      blockTimestamp: 1700000500,
+      timeFirstSeen: new Date().toISOString(),
+      burnAtoms: '1',
+    });
+    /* Legacy root tribute with a plain-text note is not a profile. */
+    store.insert({
+      burnTxid: legacyRoot,
+      tokenId: 't'.repeat(64),
+      note: 'A loving paw print',
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: legacyRoot,
+      blockHeight: 4,
+      blockTimestamp: 1700000900,
+      timeFirstSeen: new Date().toISOString(),
+      burnAtoms: '1',
+    });
+
+    expect(store.recentProfiles().map(g => g.originalBurnTxid)).toEqual([
+      newProfile,
+      oldProfile,
+    ]);
+    expect(store.recentProfiles(1).map(g => g.originalBurnTxid)).toEqual([
+      newProfile,
+    ]);
+  });
+
   it('lists pet profiles created (root burn sent) by a wallet address', () => {
     const store = new BurnStore(testStorePath);
     const mine = '3'.repeat(64);

@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import {
+  parseAnimalProfileNote,
   profileBareNameFromNote,
   profileSearchRelevance,
   profileDisplayName,
@@ -50,6 +51,12 @@ export interface MemorialGroup {
 
 export const TRENDING_WINDOW_MS = 24 * 60 * 60 * 1000;
 export { TRENDING_GRAVITY };
+
+function burnTimeMs(burn: IndexedBurn): number {
+  return burn.blockTimestamp
+    ? burn.blockTimestamp * 1000
+    : new Date(burn.timeFirstSeen).getTime();
+}
 
 export interface TrendingGroup extends MemorialGroup {
   dayBurns: number;
@@ -139,6 +146,27 @@ export class BurnStore {
         return tb - ta;
       })
       .slice(0, limit);
+  }
+
+  /**
+   * Recently created pet profiles: roots whose own burn carries a named
+   * profile note, newest first by creation time (not by later tribute
+   * activity, so a fresh tribute on an old profile does not resurface it).
+   */
+  recentProfiles(limit = 12): MemorialGroup[] {
+    const created: Array<{ group: MemorialGroup; createdAt: number }> = [];
+    for (const group of this.groups()) {
+      const root = group.burns.find(
+        b => b.burnTxid.toLowerCase() === group.originalBurnTxid.toLowerCase(),
+      );
+      /* Plain-text memorial notes (tributes) carry no profile fields. */
+      if (!root || !parseAnimalProfileNote(root.note)?.name) continue;
+      created.push({ group, createdAt: burnTimeMs(root) });
+    }
+    return created
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, limit)
+      .map(x => x.group);
   }
 
   groups(): MemorialGroup[] {
