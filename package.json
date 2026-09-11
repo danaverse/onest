@@ -21,6 +21,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@scure/bip39": "^2.4.0",
     "@spedn/rts": "^5.0.0",
     "@spedn/rts-bchjs": "^5.0.0",
     "@spedn/sdk": "^5.0.0",

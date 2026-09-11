@@ -17,4 +17,8 @@ Device PoW challenge/submit desk with fee-sponsored remint and DANA animal memor
 - `GET /api/status` — Get desk status, token era, serving tips, remaining daily offers, `minPraySeconds`
 - `GET /api/root-creator` — Check animal profile root creator status `{ txid, installId }`
 - `POST /api/cancel` — Cancel active challenge or pending burn
+- `GET /api/listing-fee` — Quote for wallet-paid burns `{ tokenId, atoms (default 6), feeAddress }`; the user's wallet burns 1 PAW, sends the fee and pays XEC, then broadcasts directly (no wait)
+- `POST /api/notify { burnTxid, installId? }` — Forward a wallet-broadcast tx to dana-index for immediate ingest
 - `GET /health` — Health check endpoint
+
+Sponsored root memorials are rejected: `kind: 'memorial'` without `parentBurnTxid` must be created from the user's wallet (pet profile = 1 PAW burn + 6-atom listing fee). Sponsored memorials are tributes only.

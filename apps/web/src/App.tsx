@@ -2,11 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useLocale } from './i18n/LocaleContext.js';
 import { BrandMark } from './components/BrandMark.js';
 import { Header } from './components/Header.js';
+import { AccountChip } from './components/AccountChip.js';
+import { UserWalletModal } from './components/UserWalletModal.js';
 import { AnimalProfileModal } from './components/AnimalProfileModal.js';
-import { MemorialDetailModal } from './components/MemorialDetailModal.js';
 import { PostComposerModal, type PetOption } from './components/PostComposerModal.js';
 import { PostCard } from './components/PostCard.js';
 import { PostDetailModal } from './components/PostDetailModal.js';
+import { PetPage } from './components/PetPage.js';
 import {
   fetchRecentBurns,
   fetchTrendingProfiles,
@@ -20,15 +22,22 @@ import {
   type FeedPost,
 } from './lib/socialApi.js';
 import { profileBareNameFromNote } from '../../../src/offering/animalProfileFields.js';
+import { speciesEmoji } from './lib/petUi.js';
 
 const FEED_PAGE_SIZE = 12;
 
+interface PageCard {
+  txid: string;
+  name: string;
+  species: string;
+  tributes: number;
+}
+
 export default function App() {
   const { t } = useLocale();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedParentTxid, setSelectedParentTxid] = useState<string | undefined>();
-  const [detailTxid, setDetailTxid] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [route, setRoute] = useState<{ name: 'home' } | { name: 'pet'; txid: string }>({
+    name: 'home',
+  });
   const [recent, setRecent] = useState<IndexBurn[]>([]);
   const [trending, setTrending] = useState<IndexMemorialGroup[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,15 +50,17 @@ export default function App() {
     open: false,
   });
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [profileModal, setProfileModal] = useState<{
+    open: boolean;
+    parentBurnTxid?: string;
+  }>({ open: false });
 
   useEffect(() => {
     loadFeed();
     loadPosts();
     checkUrlPath();
-
-    const handlePopState = () => {
-      checkUrlPath();
-    };
+    const handlePopState = () => checkUrlPath();
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -57,21 +68,21 @@ export default function App() {
   function checkUrlPath() {
     const path = window.location.pathname.replace(/^\//, '').trim().toLowerCase();
     if (/^[0-9a-f]{64}$/.test(path)) {
-      setDetailTxid(path);
-      setDetailOpen(true);
+      setRoute({ name: 'pet', txid: path });
+    } else {
+      setRoute({ name: 'home' });
     }
   }
 
-  function openDetail(txid: string) {
-    setDetailTxid(txid);
-    setDetailOpen(true);
+  function openPet(txid: string) {
     window.history.pushState(null, '', `/${txid}`);
+    setRoute({ name: 'pet', txid: txid.toLowerCase() });
+    window.scrollTo({ top: 0 });
   }
 
-  function closeDetail() {
-    setDetailOpen(false);
-    setDetailTxid(null);
+  function goHome() {
     window.history.pushState(null, '', '/');
+    setRoute({ name: 'home' });
   }
 
   async function loadFeed() {
@@ -79,7 +90,7 @@ export default function App() {
       setLoading(true);
       const [r, tr] = await Promise.all([
         fetchRecentBurns(20).catch(() => []),
-        fetchTrendingProfiles(6).catch(() => []),
+        fetchTrendingProfiles(12).catch(() => []),
       ]);
       setRecent(r);
       setTrending(tr);
@@ -135,262 +146,238 @@ export default function App() {
     return [...byRoot.entries()].map(([txid, name]) => ({ txid, name }));
   }, [recent, trending]);
 
+  const pages: PageCard[] = useMemo(() => {
+    const byRoot = new Map<string, PageCard>();
+    for (const g of trending) {
+      byRoot.set(g.originalBurnTxid.toLowerCase(), {
+        txid: g.originalBurnTxid.toLowerCase(),
+        name: profileBareNameFromNote(g.originalNote) || 'Beloved pet',
+        species: '',
+        tributes: g.totalBurns,
+      });
+    }
+    for (const b of recent) {
+      const root = (b.originalBurnTxid || b.burnTxid).toLowerCase();
+      const existing = byRoot.get(root);
+      if (existing) {
+        if (!existing.species) existing.species = '';
+        continue;
+      }
+      byRoot.set(root, {
+        txid: root,
+        name: profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`,
+        species: '',
+        tributes: 1,
+      });
+    }
+    return [...byRoot.values()].slice(0, 12);
+  }, [recent, trending]);
+
   const petNameByRoot = useMemo(() => {
     const map = new Map<string, string>();
     for (const p of pets) map.set(p.txid.toLowerCase(), p.name);
     return map;
   }, [pets]);
 
-  const hasNoData =
-    !loading && !searchResults && trending.length === 0 && recent.length === 0;
   const detailPost = detailPostId ? posts.find(p => p.id === detailPostId) : undefined;
 
   return (
     <div className="onest-app">
       <header className="onest-header">
-        <div className="header-brand">
+        <div className="header-brand clickable-brand" onClick={goHome}>
           <BrandMark width={36} height={36} className="brand-logo" />
           <div>
             <h1 className="brand-title">{t('brand')}</h1>
             <p className="brand-tagline">{t('tagline')}</p>
           </div>
         </div>
-        <Header />
+        <div className="header-right">
+          <AccountChip onOpen={() => setWalletOpen(true)} />
+          <Header />
+        </div>
       </header>
 
       <main className="onest-main">
-        <section className="hero-action">
-          <button
-            type="button"
-            className="btn-create-profile"
-            onClick={() => {
-              setSelectedParentTxid(undefined);
-              setModalOpen(true);
-            }}
-          >
-            <BrandMark width={20} height={20} />
-            <span>{t('newProfile')}</span>
-          </button>
-          <button
-            type="button"
-            className="btn-create-profile btn-share-moment"
-            onClick={() => openComposer()}
-          >
-            <span>📸</span>
-            <span>{t('shareMoment')}</span>
-          </button>
-        </section>
+        {route.name === 'pet' ? (
+          <PetPage
+            txid={route.txid}
+            onBack={goHome}
+            onTribute={rootTxid => setProfileModal({ open: true, parentBurnTxid: rootTxid })}
+            onShare={rootTxid => openComposer(rootTxid)}
+            onOpenPost={id => setDetailPostId(id)}
+          />
+        ) : (
+          <>
+            <section className="composer-card" onClick={() => openComposer()}>
+              <span className="composer-avatar">🐾</span>
+              <span className="composer-placeholder">{t('shareMomentPlaceholder')}</span>
+              <span className="composer-photo">📷</span>
+            </section>
 
-        <section className="feed-section">
-          <div className="feed-head">
-            <h2>{t('moments')}</h2>
-          </div>
-
-          {feedLoading && posts.length === 0 && (
-            <div className="feed-loading">
-              <span className="paw-spinner">🐾</span>
-            </div>
-          )}
-
-          {!feedLoading && posts.length === 0 && (
-            <p className="empty-hint">{t('noMomentsYet')}</p>
-          )}
-
-          {posts.length > 0 && (
-            <div className="post-grid">
-              {posts.map(p => (
-                <PostCard
-                  key={p.id}
-                  post={p}
-                  petName={petNameByRoot.get(p.petRootTxid.toLowerCase())}
-                  onOpen={() => setDetailPostId(p.id)}
-                  onVoted={handleVoted}
+            <section className="search-section">
+              <form onSubmit={handleSearch} className="search-form">
+                <input
+                  type="search"
+                  placeholder={t('searchPlaceholder')}
+                  value={searchQuery}
+                  onChange={e => {
+                    setSearchQuery(e.target.value);
+                    if (!e.target.value.trim()) setSearchResults(null);
+                  }}
                 />
-              ))}
-            </div>
-          )}
+                <button type="submit" className="btn-search">
+                  {t('search')}
+                </button>
+              </form>
+            </section>
 
-          {postsNext && (
-            <div className="feed-more">
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={feedLoading}
-                onClick={() => loadPosts(postsNext)}
-              >
-                {t('loadMore')}
-              </button>
-            </div>
-          )}
-        </section>
-
-        <section className="search-section">
-          <form onSubmit={handleSearch} className="search-form">
-            <input
-              type="search"
-              placeholder={t('searchPlaceholder')}
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value);
-                if (!e.target.value.trim()) setSearchResults(null);
-              }}
-            />
-            <button type="submit" className="btn-search">Search</button>
-          </form>
-        </section>
-
-        {loading && (
-          <div className="feed-loading">
-            <span className="paw-spinner">🐾</span>
-            <p>Loading animal memories...</p>
-          </div>
-        )}
-
-        {hasNoData && (
-          <section className="empty-welcome-card">
-            <div className="welcome-icon">🐾</div>
-            <h2>Welcome to Onest</h2>
-            <p className="welcome-text">
-              Preserve the eternal memory of your beloved animal companions.
-              Create an animal memory profile and dedicate loving paw-print tributes.
-            </p>
-            <button
-              type="button"
-              className="btn-create-profile btn-welcome-action"
-              onClick={() => {
-                setSelectedParentTxid(undefined);
-                setModalOpen(true);
-              }}
-            >
-              <BrandMark width={20} height={20} />
-              <span>{t('newProfile')}</span>
-            </button>
-          </section>
-        )}
-
-        {searchResults && (
-          <section className="profiles-section">
-            <h2>Search Results</h2>
-            <div className="profile-grid">
-              {searchResults.map(g => (
-                <div
-                  key={g.originalBurnTxid}
-                  className="profile-card clickable"
-                  onClick={() => openDetail(g.originalBurnTxid)}
-                >
-                  <div className="card-top">
-                    <BrandMark width={24} height={24} className="pet-icon" />
-                    <h3>{profileBareNameFromNote(g.originalNote) || 'Animal Friend'}</h3>
-                  </div>
-                  <p className="tribute-count">🐾 {g.totalBurns} paw print{g.totalBurns > 1 ? 's' : ''}</p>
-                  <div className="card-actions" onClick={e => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="btn-tribute"
-                      onClick={() => {
-                        setSelectedParentTxid(g.originalBurnTxid);
-                        setModalOpen(true);
-                      }}
+            {searchResults ? (
+              <section className="profiles-section">
+                <h2>{t('searchResults')}</h2>
+                <div className="profile-grid">
+                  {searchResults.map(g => (
+                    <div
+                      key={g.originalBurnTxid}
+                      className="profile-card clickable"
+                      onClick={() => openPet(g.originalBurnTxid)}
                     >
-                      {t('pawTribute')}
-                    </button>
-                  </div>
+                      <div className="card-top">
+                        <span className="page-chip-avatar">{speciesEmoji('')}</span>
+                        <h3>{profileBareNameFromNote(g.originalNote) || 'Animal Friend'}</h3>
+                      </div>
+                      <p className="tribute-count">
+                        🐾 {g.totalBurns} tribute{g.totalBurns > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  ))}
+                  {searchResults.length === 0 && (
+                    <p className="empty-hint">{t('noProfilesFound')}</p>
+                  )}
                 </div>
-              ))}
-              {searchResults.length === 0 && <p className="empty-hint">{t('noProfilesFound')}</p>}
-            </div>
-          </section>
-        )}
+              </section>
+            ) : (
+              <>
+                {pages.length > 0 && (
+                  <section className="pages-section">
+                    <div className="feed-head">
+                      <h2>{t('belovedPages')}</h2>
+                      <button
+                        type="button"
+                        className="btn-tribute-link"
+                        onClick={() => setProfileModal({ open: true })}
+                      >
+                        + {t('newProfile')}
+                      </button>
+                    </div>
+                    <div className="page-strip">
+                      {pages.map(p => (
+                        <button
+                          key={p.txid}
+                          type="button"
+                          className="page-chip"
+                          onClick={() => openPet(p.txid)}
+                        >
+                          <span className="page-chip-avatar">{speciesEmoji(p.species)}</span>
+                          <span className="page-chip-name">{p.name}</span>
+                          <span className="page-chip-sub">🐾 {p.tributes}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-        {trending.length > 0 && !searchResults && (
-          <section className="profiles-section">
-            <h2>{t('trendingPets')}</h2>
-            <div className="profile-grid">
-              {trending.map(g => (
-                <div
-                  key={g.originalBurnTxid}
-                  className="profile-card clickable"
-                  onClick={() => openDetail(g.originalBurnTxid)}
-                >
-                  <div className="card-top">
-                    <BrandMark width={24} height={24} className="pet-icon" />
-                    <h3>{profileBareNameFromNote(g.originalNote) || 'Beloved Pet'}</h3>
+                <section className="timeline-section">
+                  <div className="feed-head">
+                    <h2>{t('moments')}</h2>
                   </div>
-                  <p className="tribute-count">🐾 {g.totalBurns} paw print{g.totalBurns > 1 ? 's' : ''}</p>
-                  <div className="card-actions" onClick={e => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="btn-tribute"
-                      onClick={() => {
-                        setSelectedParentTxid(g.originalBurnTxid);
-                        setModalOpen(true);
-                      }}
-                    >
-                      {t('pawTribute')}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
-        {recent.length > 0 && !searchResults && (
-          <section className="recent-section">
-            <h2>{t('recentTributes')}</h2>
-            <ul className="tribute-list">
-              {recent.map(b => (
-                <li key={b.burnTxid} className="tribute-item">
-                  <span className="paw-bullet">🐾</span>
-                  <div className="tribute-details">
-                    <span
-                      className="tribute-note clickable-text"
-                      onClick={() => openDetail(b.originalBurnTxid || b.burnTxid)}
-                    >
-                      {profileBareNameFromNote(b.note) || 'A loving paw print tribute'}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-tribute-link"
-                      onClick={() => {
-                        setSelectedParentTxid(b.originalBurnTxid || b.burnTxid);
-                        setModalOpen(true);
-                      }}
-                    >
-                      {t('pawTribute')}
-                    </button>
-                    <a
-                      href={`https://danaverse.org/offering/${b.burnTxid}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="tx-link"
-                    >
-                      {b.burnTxid.slice(0, 8)}...
-                    </a>
+                  {feedLoading && posts.length === 0 && (
+                    <div className="feed-loading">
+                      <span className="paw-spinner">🐾</span>
+                    </div>
+                  )}
+
+                  {!feedLoading && posts.length === 0 && (
+                    <div className="empty-welcome-card">
+                      <p className="empty-hint">{t('noMomentsYet')}</p>
+                    </div>
+                  )}
+
+                  <div className="timeline-list">
+                    {posts.map(p => (
+                      <PostCard
+                        key={p.id}
+                        post={p}
+                        onOpen={() => setDetailPostId(p.id)}
+                        onOpenPet={() => openPet(p.petRootTxid)}
+                        onVoted={handleVoted}
+                      />
+                    ))}
                   </div>
-                </li>
-              ))}
-            </ul>
-          </section>
+
+                  {postsNext && (
+                    <div className="feed-more">
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={feedLoading}
+                        onClick={() => loadPosts(postsNext)}
+                      >
+                        {t('loadMore')}
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                {recent.length > 0 && (
+                  <section className="recent-section">
+                    <h2>{t('recentTributes')}</h2>
+                    <ul className="tribute-list">
+                      {recent.map(b => (
+                        <li key={b.burnTxid} className="tribute-item">
+                          <span className="paw-bullet">🐾</span>
+                          <div className="tribute-details">
+                            <span
+                              className="tribute-note clickable-text"
+                              onClick={() => openPet(b.originalBurnTxid || b.burnTxid)}
+                            >
+                              {profileBareNameFromNote(b.note) || 'A loving paw print tribute'}
+                            </span>
+                            <a
+                              href={`https://danaverse.org/offering/${b.burnTxid}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="tx-link"
+                            >
+                              {b.burnTxid.slice(0, 8)}...
+                            </a>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                {loading && (
+                  <div className="feed-loading">
+                    <span className="paw-spinner">🐾</span>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
       </main>
 
       <AnimalProfileModal
-        open={modalOpen}
-        parentBurnTxid={selectedParentTxid}
-        onClose={() => setModalOpen(false)}
-        onSuccess={() => loadFeed()}
-      />
-
-      <MemorialDetailModal
-        open={detailOpen}
-        txid={detailTxid}
-        onClose={closeDetail}
-        onLeaveTribute={rootTxid => {
-          setSelectedParentTxid(rootTxid);
-          setModalOpen(true);
+        open={profileModal.open}
+        parentBurnTxid={profileModal.parentBurnTxid}
+        onClose={() => setProfileModal({ open: false })}
+        onRequestWallet={() => setWalletOpen(true)}
+        onSuccess={() => {
+          loadFeed();
+          loadPosts();
         }}
-        onLeavePost={rootTxid => openComposer(rootTxid)}
       />
 
       <PostComposerModal
@@ -399,18 +386,26 @@ export default function App() {
         pets={pets}
         initialPetTxid={composer.petTxid}
         onClose={() => setComposer({ open: false })}
-        onSuccess={() => loadPosts()}
+        onSuccess={() => {
+          loadPosts();
+          loadFeed();
+        }}
       />
 
       <PostDetailModal
         open={Boolean(detailPostId)}
         postId={detailPostId}
         petName={
-          detailPost ? petNameByRoot.get(detailPost.petRootTxid.toLowerCase()) : undefined
+          detailPost
+            ? detailPost.pet?.name ||
+              petNameByRoot.get(detailPost.petRootTxid.toLowerCase())
+            : undefined
         }
         onClose={() => setDetailPostId(null)}
         onChanged={() => loadPosts()}
       />
+
+      <UserWalletModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
   );
 }

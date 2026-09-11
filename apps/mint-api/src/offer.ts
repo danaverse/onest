@@ -50,6 +50,7 @@ import {
   WLOTUS_GENESIS_UNIX,
   POW_PAW_BASE_ZERO_BITS,
   isPawFeltCovenant,
+  resolvePawListingFeeAtoms,
 } from '../../../src/params/pawMint.js';
 import {
   encodePostStampPushdata,
@@ -135,6 +136,11 @@ const PENDING_BURN_TTL_MS = 15 * 60_000;
 
 /** Server-enforced soft wait ("min pray"). Default 54s, 0 disables. */
 const MIN_PRAY_SECONDS = parseMinPraySeconds(process.env.MINT_MIN_PRAY_SECONDS);
+
+/** PAW atoms the user's wallet pays the desk on user-paid burns. */
+const LISTING_FEE_ATOMS = resolvePawListingFeeAtoms(
+  process.env.MINT_LISTING_FEE_ATOMS,
+);
 
 export type BurnKind = 'memorial' | 'post' | 'vote';
 
@@ -319,7 +325,7 @@ export function requireMintDesk(): void {
   if (dep.tokenId) assertDeskTokenId(dep.tokenId);
 }
 
-function notifyDanaIndex(burnTxid: string, installId?: string): void {
+export function notifyDanaIndex(burnTxid: string, installId?: string): void {
   const base = process.env.DANA_INDEX_URL?.trim();
   if (!base) return;
   const url = `${base.replace(/\/$/, '')}/api/notify`;
@@ -352,6 +358,27 @@ export function publicStatus(installId?: string) {
     raceOpen: true,
     minPraySeconds: MIN_PRAY_SECONDS,
     burnKinds: ['memorial', 'post', 'vote'],
+    listingFeeAtoms: LISTING_FEE_ATOMS.toString(),
+  };
+}
+
+/**
+ * Quote for wallet-paid burns: destination desk address + atoms.
+ * The client builds and broadcasts the burn from its own wallet (no wait).
+ */
+export async function listingFeeInfo(): Promise<{
+  tokenId: string;
+  atoms: string;
+  feeAddress: string;
+}> {
+  const dep = loadDepJson();
+  if (!dep.tokenId) throw new Error('No PAW TOKEN_ID configured');
+  const chronik = await createChronik();
+  const tipWallet = await loadTipFeeWallet(chronik, servingTipIndex());
+  return {
+    tokenId: dep.tokenId,
+    atoms: LISTING_FEE_ATOMS.toString(),
+    feeAddress: tipWallet.address,
   };
 }
 
@@ -375,6 +402,13 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
 
   const kind: BurnKind =
     opts.kind === 'post' ? 'post' : opts.kind === 'vote' ? 'vote' : 'memorial';
+  // Pet profiles are user-paid: the wallet burns 1 PAW + pays the listing fee.
+  // Sponsored memorials are tributes only (they carry parentBurnTxid).
+  if (kind === 'memorial' && !opts.parentBurnTxid) {
+    throw new Error(
+      'Pet profiles must be created from your wallet (user profile required). Sponsored burns are for tributes only.',
+    );
+  }
   let contentHash: string | undefined;
   let postHash: string | undefined;
   let voteDirection: VoteDirection | undefined;

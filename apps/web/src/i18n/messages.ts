@@ -48,8 +48,47 @@ export type MessageKey =
   | 'noCommentsYet'
   | 'commentPlaceholder'
   | 'sendComment'
-  | 'pending'
-  | 'loading';
+  | 'shareMomentPlaceholder'
+  | 'search'
+  | 'searchResults'
+  | 'belovedPages'
+  | 'postsTab'
+  | 'tributesTab'
+  | 'noPetPosts'
+  | 'backToHome'
+  | 'copyLink'
+  | 'linkCopied'
+  | 'userProfile'
+  | 'createUserProfile'
+  | 'restoreUserProfile'
+  | 'userProfileIntro'
+  | 'userProfileRequired'
+  | 'passphrase'
+  | 'confirmPassphrase'
+  | 'passphraseHint'
+  | 'passphraseMismatch'
+  | 'invalidSeed'
+  | 'seedPhrase'
+  | 'seedWarning'
+  | 'iveSavedIt'
+  | 'copyWords'
+  | 'downloadWords'
+  | 'walletAddress'
+  | 'refreshBalances'
+  | 'removeWallet'
+  | 'walletReady'
+  | 'walletReadyHint'
+  | 'loadingWallet'
+  | 'backupHint'
+  | 'lockWallet'
+  | 'unlockWallet'
+  | 'backupSeed'
+  | 'profileFeeHint'
+  | 'needPawForProfile'
+  | 'needXecForProfile'
+  | 'creatingProfileWallet'
+  | 'loading'
+  | 'back';
 
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -101,8 +140,51 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: 'No comments yet.',
     commentPlaceholder: 'Leave a kind word...',
     sendComment: 'Send',
-    pending: 'Pending',
+    shareMomentPlaceholder: 'Share a moment with your beloved animal...',
+    search: 'Search',
+    searchResults: 'Search results',
+    belovedPages: 'Beloved Pages',
+    postsTab: 'Moments',
+    tributesTab: 'Paw tributes',
+    noPetPosts: 'No moments shared for this page yet.',
+    backToHome: 'Home',
+    copyLink: 'Copy link',
+    linkCopied: 'Link copied!',
+    userProfile: 'User Profile',
+    createUserProfile: 'Create user profile',
+    restoreUserProfile: 'Restore from seed phrase',
+    userProfileIntro:
+      'Your user profile is a self-custodial XEC + PAW wallet. Create animal profiles from it — no server holds your keys.',
+    userProfileRequired:
+      'A user profile is required to create animal profiles. Your wallet burns 1 PAW and pays the desk listing fee.',
+    passphrase: 'Passphrase',
+    confirmPassphrase: 'Confirm passphrase',
+    passphraseHint: 'At least 8 characters',
+    passphraseMismatch: 'Passphrases do not match',
+    invalidSeed: 'Invalid seed phrase',
+    seedPhrase: 'Seed phrase',
+    seedWarning:
+      'Write these 12 words down and keep them offline. Anyone with them controls your wallet. We cannot recover them.',
+    iveSavedIt: 'I saved my seed phrase safely',
+    copyWords: 'Copy words',
+    downloadWords: 'Download backup',
+    walletAddress: 'Wallet address',
+    refreshBalances: 'Refresh balances',
+    removeWallet: 'Remove wallet from this device',
+    walletReady: 'User profile ready!',
+    walletReadyHint: 'Your wallet is unlocked. You can now create animal profiles.',
+    loadingWallet: 'Opening your wallet...',
+    backupHint: 'Enter your passphrase to reveal your seed phrase.',
+    lockWallet: 'Lock',
+    unlockWallet: 'Unlock',
+    backupSeed: 'Backup seed',
+    profileFeeHint:
+      'Creating an animal profile burns 1 PAW and pays a {atoms}-atom listing fee to the desk, plus XEC network fees from your wallet.',
+    needPawForProfile: 'Your wallet needs at least {atoms} PAW (1 burn + listing fee).',
+    needXecForProfile: 'Your wallet needs a little XEC for network fees.',
+    creatingProfileWallet: 'Creating your animal profile from your wallet...',
     loading: 'Loading...',
+    back: 'Back',
   },
   vi: {
     brand: 'Onest',
@@ -153,8 +235,51 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: 'Chưa có bình luận nào.',
     commentPlaceholder: 'Gửi lời nhắn yêu thương...',
     sendComment: 'Gửi',
-    pending: 'Đang chờ',
+    shareMomentPlaceholder: 'Chia sẻ khoảnh khắc cùng bé yêu...',
+    search: 'Tìm',
+    searchResults: 'Kết quả tìm kiếm',
+    belovedPages: 'Trang thú cưng',
+    postsTab: 'Khoảnh khắc',
+    tributesTab: 'Dấu chân tri ân',
+    noPetPosts: 'Trang này chưa có khoảnh khắc nào.',
+    backToHome: 'Trang chủ',
+    copyLink: 'Sao chép liên kết',
+    linkCopied: 'Đã sao chép!',
+    userProfile: 'Hồ sơ người dùng',
+    createUserProfile: 'Tạo hồ sơ người dùng',
+    restoreUserProfile: 'Khôi phục từ cụm từ hạt giống',
+    userProfileIntro:
+      'Hồ sơ người dùng là ví XEC + PAW tự quản. Tạo hồ sơ thú cưng từ ví này — không máy chủ nào giữ khoá của bạn.',
+    userProfileRequired:
+      'Cần có hồ sơ người dùng để tạo hồ sơ thú cưng. Ví sẽ đốt 1 PAW và trả phí niêm yết cho bàn.',
+    passphrase: 'Mật khẩu',
+    confirmPassphrase: 'Nhập lại mật khẩu',
+    passphraseHint: 'Ít nhất 8 ký tự',
+    passphraseMismatch: 'Mật khẩu không khớp',
+    invalidSeed: 'Cụm từ hạt giống không hợp lệ',
+    seedPhrase: 'Cụm từ hạt giống',
+    seedWarning:
+      'Hãy ghi lại 12 từ này và cất giữ ngoại tuyến. Ai có chúng sẽ kiểm soát ví của bạn. Chúng tôi không thể khôi phục.',
+    iveSavedIt: 'Tôi đã lưu cụm từ hạt giống an toàn',
+    copyWords: 'Sao chép',
+    downloadWords: 'Tải bản sao lưu',
+    walletAddress: 'Địa chỉ ví',
+    refreshBalances: 'Cập nhật số dư',
+    removeWallet: 'Xoá ví khỏi thiết bị này',
+    walletReady: 'Hồ sơ người dùng đã sẵn sàng!',
+    walletReadyHint: 'Ví đã mở khoá. Bạn có thể tạo hồ sơ thú cưng.',
+    loadingWallet: 'Đang mở ví...',
+    backupHint: 'Nhập mật khẩu để xem cụm từ hạt giống.',
+    lockWallet: 'Khoá',
+    unlockWallet: 'Mở khoá',
+    backupSeed: 'Sao lưu hạt giống',
+    profileFeeHint:
+      'Tạo hồ sơ thú cưng sẽ đốt 1 PAW và trả phí niêm yết {atoms} atom cho bàn, cùng phí mạng XEC từ ví của bạn.',
+    needPawForProfile: 'Ví cần ít nhất {atoms} PAW (1 đốt + phí niêm yết).',
+    needXecForProfile: 'Ví cần một ít XEC cho phí mạng.',
+    creatingProfileWallet: 'Đang tạo hồ sơ thú cưng từ ví...',
     loading: 'Đang tải...',
+    back: 'Quay lại',
   },
   zh: {
     brand: 'Onest',
@@ -204,8 +329,48 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: '还没有评论。',
     commentPlaceholder: '留下温暖的话语...',
     sendComment: '发送',
-    pending: '确认中',
+    shareMomentPlaceholder: '与心爱的宠物分享此刻...',
+    search: '搜索',
+    searchResults: '搜索结果',
+    belovedPages: '心爱的主页',
+    postsTab: '回忆瞬间',
+    tributesTab: '爪印致敬',
+    noPetPosts: '这个主页还没有分享的瞬间。',
+    backToHome: '首页',
+    copyLink: '复制链接',
+    linkCopied: '已复制！',
+    userProfile: '用户资料',
+    createUserProfile: '创建用户资料',
+    restoreUserProfile: '从助记词恢复',
+    userProfileIntro:
+      '用户资料是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
+    userProfileRequired: '创建宠物档案需要用户资料。钱包将销毁 1 PAW 并支付上架费。',
+    passphrase: '密码',
+    confirmPassphrase: '确认密码',
+    passphraseHint: '至少 8 个字符',
+    passphraseMismatch: '两次密码不一致',
+    invalidSeed: '助记词无效',
+    seedPhrase: '助记词',
+    seedWarning: '请将这 12 个单词抄写并离线保存。任何拿到它的人都能控制你的钱包。我们无法恢复。',
+    iveSavedIt: '我已安全保存助记词',
+    copyWords: '复制',
+    downloadWords: '下载备份',
+    walletAddress: '钱包地址',
+    refreshBalances: '刷新余额',
+    removeWallet: '从此设备移除钱包',
+    walletReady: '用户资料已就绪！',
+    walletReadyHint: '钱包已解锁，现在可以创建宠物档案。',
+    loadingWallet: '正在打开钱包...',
+    backupHint: '输入密码以显示助记词。',
+    lockWallet: '锁定',
+    unlockWallet: '解锁',
+    backupSeed: '备份助记词',
+    profileFeeHint: '创建宠物档案将销毁 1 PAW，并向服务台支付 {atoms} atom 上架费，另需钱包支付 XEC 网络费。',
+    needPawForProfile: '钱包至少需要 {atoms} PAW（1 销毁 + 上架费）。',
+    needXecForProfile: '钱包需要少量 XEC 支付网络费。',
+    creatingProfileWallet: '正在用钱包创建宠物档案...',
     loading: '加载中...',
+    back: '返回',
   },
 };
 
