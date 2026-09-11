@@ -262,6 +262,34 @@ export function AnimalProfileModal(props: {
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
 
+            {isCreate &&
+              !busy &&
+              (userWallet.status !== 'unlocked' ||
+                (userWallet.balances != null &&
+                  (userWallet.balances.pawAtoms < MIN_PROFILE_PAW ||
+                    userWallet.balances.xecSats < MIN_PROFILE_XEC_SATS))) && (
+                <div className="wallet-gate">
+                  <p>
+                    {userWallet.status !== 'unlocked'
+                      ? t('userProfileRequired')
+                      : userWallet.balances != null &&
+                          userWallet.balances.pawAtoms < MIN_PROFILE_PAW
+                        ? t('needPawForProfile', { atoms: Number(MIN_PROFILE_PAW) })
+                        : t('needXecForProfile')}
+                  </p>
+                  {userWallet.address && (
+                    <code className="wallet-address">{userWallet.address}</code>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => props.onRequestWallet?.()}
+                  >
+                    {userWallet.address ? t('openUserProfile') : t('createUserProfile')}
+                  </button>
+                </div>
+              )}
+
             {!busy && (
               <p className="pow-hint">
                 {isCreate ? t('profileFeeHint', { atoms: Number(PAW_LISTING_FEE_ATOMS) }) : t('powHint')}

@@ -88,6 +88,10 @@ export type MessageKey =
   | 'needXecForProfile'
   | 'creatingProfileWallet'
   | 'loading'
+  | 'noPagesYet'
+  | 'openUserProfile'
+  | 'copyAddress'
+  | 'depositHint'
   | 'back';
 
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
@@ -184,6 +188,11 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     needXecForProfile: 'Your wallet needs a little XEC for network fees.',
     creatingProfileWallet: 'Creating your animal profile from your wallet...',
     loading: 'Loading...',
+    noPagesYet: 'No pet pages yet. Create the first animal profile to start sharing moments.',
+    openUserProfile: 'Open user profile',
+    copyAddress: 'Copy address',
+    depositHint:
+      'Send XEC (for network fees) and PAW (1 burn + 6-atom listing fee) to this address before creating an animal profile.',
     back: 'Back',
   },
   vi: {
@@ -279,6 +288,11 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     needXecForProfile: 'Ví cần một ít XEC cho phí mạng.',
     creatingProfileWallet: 'Đang tạo hồ sơ thú cưng từ ví...',
     loading: 'Đang tải...',
+    noPagesYet: 'Chưa có trang thú cưng nào. Hãy tạo hồ sơ đầu tiên để bắt đầu chia sẻ khoảnh khắc.',
+    openUserProfile: 'Mở hồ sơ người dùng',
+    copyAddress: 'Sao chép địa chỉ',
+    depositHint:
+      'Hãy gửi XEC (phí mạng) và PAW (1 đốt + phí niêm yết 6 atom) vào địa chỉ này trước khi tạo hồ sơ thú cưng.',
     back: 'Quay lại',
   },
   zh: {
@@ -370,6 +384,10 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     needXecForProfile: '钱包需要少量 XEC 支付网络费。',
     creatingProfileWallet: '正在用钱包创建宠物档案...',
     loading: '加载中...',
+    noPagesYet: '还没有宠物主页。创建第一个宠物档案，开始分享回忆吧。',
+    openUserProfile: '打开用户资料',
+    copyAddress: '复制地址',
+    depositHint: '创建宠物档案前，请先向此地址发送 XEC（网络费）和 PAW（1 销毁 + 6 atom 上架费）。',
     back: '返回',
   },
 };
