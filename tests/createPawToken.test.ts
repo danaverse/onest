@@ -1,8 +1,10 @@
 import {
   parseArgs,
+  parseDeskSeed,
   resolveTokenConfig,
   updateEnvFile,
 } from '../src/params/tokenCli.js';
+import { assertDeskTokenId, WLOTUS_TOKEN_ID } from '../src/params/pawTokens.js';
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -119,6 +121,35 @@ describe('create-paw-token CLI argument parsing & config resolution', () => {
     expect(opts.force).toBe(true);
     expect(opts.skipHandoff).toBe(true);
     expect(opts.help).toBe(true);
+  });
+});
+
+describe('parseDeskSeed', () => {
+  const twelve =
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+
+  it('returns empty for blank input', () => {
+    expect(parseDeskSeed('')).toBe('');
+    expect(parseDeskSeed(undefined)).toBe('');
+  });
+
+  it('normalizes quotes, extra whitespace, and JSON wrappers', () => {
+    expect(parseDeskSeed(`"${twelve}"`)).toBe(twelve);
+    expect(parseDeskSeed(`  ${twelve}  `)).toBe(twelve);
+    expect(parseDeskSeed(JSON.stringify(twelve))).toBe(twelve);
+    expect(parseDeskSeed(JSON.stringify([twelve, 'ignore me please extra']))).toBe(
+      twelve,
+    );
+  });
+
+  it('rejects a phrase that is not 12 or 24 words', () => {
+    expect(() => parseDeskSeed('only five words are here')).toThrow(/12- or 24-word/);
+  });
+});
+
+describe('assertDeskTokenId', () => {
+  it('rejects the live WLotus token id', () => {
+    expect(() => assertDeskTokenId(WLOTUS_TOKEN_ID)).toThrow(/WLotus/);
   });
 });
 

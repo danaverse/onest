@@ -1,0 +1,17 @@
+[Unit]
+Description=Onest DANA memorial index
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/onest
+Environment=NODE_ENV=production
+Environment=DANA_INDEX_PORT=9788
+Environment=ONEST_DANA_INDEX_ENV=/etc/onest/dana-index.env
+ExecStart=/opt/onest/deploy/contabo/run-dana-index.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

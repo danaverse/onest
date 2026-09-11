@@ -23,6 +23,55 @@ export interface ResolvedTokenConfig {
   skipHandoff: boolean;
 }
 
+/**
+ * Resolve the desk/genesis mnemonic from env.
+ * `TEST_DESK_SEEDS` is the Cursor/GitHub secret for the test desk; it may be a
+ * quoted phrase, a JSON string, or a JSON array (first entry wins).
+ */
+export function parseDeskSeed(raw?: string): string {
+  let s = (raw ?? '').trim();
+  if (!s) return '';
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  if (s.startsWith('[') || s.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(s) as unknown;
+      if (typeof parsed === 'string') s = parsed;
+      else if (Array.isArray(parsed)) {
+        const first = parsed.find(x => typeof x === 'string' && x.trim());
+        s = typeof first === 'string' ? first : '';
+      } else if (parsed && typeof parsed === 'object') {
+        const rec = parsed as Record<string, unknown>;
+        const candidate =
+          rec.mnemonic ?? rec.seed ?? rec.MINT_MNEMONIC ?? rec.desk;
+        s = typeof candidate === 'string' ? candidate : '';
+      }
+    } catch {
+      /* treat as a raw phrase */
+    }
+  }
+  const phrase = s.trim().split(/\s+/).join(' ');
+  const words = phrase.split(' ').filter(Boolean);
+  if (words.length !== 12 && words.length !== 24) {
+    throw new Error(
+      `Desk seed must be a 12- or 24-word mnemonic (got ${words.length} words)`,
+    );
+  }
+  return phrase;
+}
+
+export function resolveDeskMnemonic(): string {
+  return parseDeskSeed(
+    process.env.TEST_DESK_SEEDS ||
+      process.env.GENESIS_MNEMONIC ||
+      process.env.MINT_MNEMONIC,
+  );
+}
+
 export function parseArgs(args: string[]): CliOptions {
   const opts: CliOptions = {
     isTest: false,
