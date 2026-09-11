@@ -1,7 +1,9 @@
 import {
   DEFAULT_PROFILE_XEC_FEE,
+  DEFAULT_VOTE_XEC_FEE,
   PROFILE_FEE_MAX_XEC,
   resolveProfileXecFee,
+  resolveVoteXecFee,
   sumOutputsToScript,
   xecFromSats,
   xecToSats,
@@ -15,6 +17,18 @@ describe('profile XEC fee', () => {
     expect(resolveProfileXecFee('0')).toBe(20n);
     expect(resolveProfileXecFee('999999')).toBe(PROFILE_FEE_MAX_XEC);
     expect(resolveProfileXecFee('nope')).toBe(20n);
+  });
+
+  it('defaults the vote fee to 6 XEC and clamps overrides', () => {
+    expect(DEFAULT_VOTE_XEC_FEE).toBe(6n);
+    expect(resolveVoteXecFee(undefined)).toBe(6n);
+    expect(resolveVoteXecFee('')).toBe(6n);
+    expect(resolveVoteXecFee('nope')).toBe(6n);
+    expect(resolveVoteXecFee('5')).toBe(5n);
+    expect(resolveVoteXecFee(8n)).toBe(8n);
+    expect(resolveVoteXecFee('0')).toBe(6n);
+    expect(resolveVoteXecFee('999999')).toBe(PROFILE_FEE_MAX_XEC);
+    expect(xecToSats(resolveVoteXecFee('6'))).toBe(600n);
   });
 
   it('converts XEC <-> sats', () => {

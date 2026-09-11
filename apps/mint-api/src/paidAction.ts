@@ -1,5 +1,5 @@
 /**
- * Shared flat-fee paid actions (profiles, post stamps).
+ * Shared flat-fee paid actions (profiles, post stamps, votes).
  *
  * The user pays XEC on-chain; the desk verifies the payment (amount, payer,
  * single-use), ensures it holds enough PAW inventory, then runs the action
@@ -110,7 +110,7 @@ function senderAddressFromTx(tx: Tx): string | null {
   return null;
 }
 
-export async function paidActionFeeInfo(): Promise<{
+export async function paidActionFeeInfo(feeXec: bigint = FEE_XEC): Promise<{
   ok: true;
   xec: string;
   xecSats: string;
@@ -120,8 +120,8 @@ export async function paidActionFeeInfo(): Promise<{
   const tipWallet = await loadTipFeeWallet(chronik, parseServingTipIndex());
   return {
     ok: true,
-    xec: FEE_XEC.toString(),
-    xecSats: xecToSats(FEE_XEC).toString(),
+    xec: feeXec.toString(),
+    xecSats: xecToSats(feeXec).toString(),
     address: tipWallet.address,
   };
 }
@@ -143,10 +143,13 @@ export async function consumePaidAction<T>(input: {
   installId: string;
   address: string;
   paymentTxid: string;
-  /** Desk PAW required (profiles: 7, post stamps: 1). */
+  /** Desk PAW required (profiles: 7, post/vote burns: 1). */
   minDeskPaw: bigint;
+  /** Flat fee expected for this action (defaults to the profile/action fee). */
+  feeXec?: bigint;
   run: (ctx: PaidActionContext) => Promise<T>;
 }): Promise<T> {
+  const feeXec = input.feeXec ?? FEE_XEC;
   const dep = loadDepJson();
   if (!dep.tokenId) throw new Error('No PAW TOKEN_ID configured');
 
@@ -167,7 +170,7 @@ export async function consumePaidAction<T>(input: {
     const tx = await fetchTxWithRetry(chronik, paymentTxid);
     const tipWallet = await loadTipFeeWallet(chronik, parseServingTipIndex());
 
-    const feeSats = xecToSats(FEE_XEC);
+    const feeSats = xecToSats(feeXec);
     const paid = sumOutputsToScript(
       (tx.outputs ?? []) as Array<{ sats: bigint; outputScript: string }>,
       toHex(tipWallet.wallet.script.bytecode),
@@ -192,7 +195,7 @@ export async function consumePaidAction<T>(input: {
         dep,
         tipWallet,
         paidSats: paid,
-        feeXec: FEE_XEC.toString(),
+        feeXec: feeXec.toString(),
       });
     } catch (e) {
       unmarkUsed(paymentTxid);

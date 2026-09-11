@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
-import {
-  fetchPost,
-  mediaUrl,
-  type FeedPost,
-} from '../lib/socialApi.js';
+import { fetchPost, type FeedPost } from '../lib/socialApi.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
+import { useWallet } from '../wallet/WalletContext.js';
+import { BrandMark } from './BrandMark.js';
+import { VoteModal } from './VoteModal.js';
 
 export function VoteButton(props: {
   post: FeedPost;
@@ -13,12 +12,14 @@ export function VoteButton(props: {
   onError?: (message: string) => void;
 }) {
   const { t } = useLocale();
+  const { status, wallet } = useWallet();
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  async function vote(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (busy) return;
+  const canPay = status === 'unlocked' && !!wallet;
+
+  async function sponsoredVote() {
     setBusy(true);
     setProgress(t('votingStart'));
     try {
@@ -43,19 +44,39 @@ export function VoteButton(props: {
     }
   }
 
+  function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (busy) return;
+    if (canPay && wallet) {
+      setModalOpen(true);
+      return;
+    }
+    void sponsoredVote();
+  }
+
   return (
     <div className="vote-wrap">
       <button
         type="button"
         className="btn-vote"
         disabled={busy}
-        onClick={vote}
+        onClick={handleClick}
         aria-label={t('voteUp')}
       >
-        <span className="vote-arrow">▲</span>
+        <BrandMark width={14} height={14} className="vote-paw" />
         <span className="vote-count">{props.post.upvoteAtoms}</span>
       </button>
       {progress && <span className="vote-progress">{progress}</span>}
+      {canPay && wallet && (
+        <VoteModal
+          open={modalOpen}
+          post={props.post}
+          wallet={wallet}
+          onClose={() => setModalOpen(false)}
+          onVoted={props.onVoted}
+          onError={props.onError}
+        />
+      )}
     </div>
   );
 }
