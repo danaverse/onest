@@ -1,4 +1,5 @@
 import { useLocale } from '../i18n/LocaleContext.js';
+import { formatXecSats } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
 function shortAddress(address: string): string {
@@ -12,8 +13,9 @@ export function AccountChip({ onOpen }: { onOpen: () => void }) {
   let label = t('createUserProfile');
   if (status === 'locked' && address) label = `🔒 ${shortAddress(address)}`;
   if (status === 'unlocked' && address) {
-    const paw = balances ? `${balances.pawAtoms} PAW` : shortAddress(address);
-    label = `🐾 ${paw}`;
+    label = balances
+      ? `${formatXecSats(balances.xecSats)} XEC`
+      : shortAddress(address);
   }
 
   return (

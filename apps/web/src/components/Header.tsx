@@ -6,18 +6,18 @@ export function Header() {
 
   return (
     <div className="header-actions">
-      <div className="locale-switch">
+      <select
+        className="locale-select"
+        value={locale}
+        aria-label="Language"
+        onChange={e => setLocale(e.target.value as Locale)}
+      >
         {LOCALE_OPTIONS.map(opt => (
-          <button
-            key={opt.locale}
-            type="button"
-            className={`btn-lang ${locale === opt.locale ? 'is-active' : ''}`}
-            onClick={() => setLocale(opt.locale)}
-          >
+          <option key={opt.locale} value={opt.locale}>
             {opt.label}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
       <button
         type="button"
         className="btn-theme"

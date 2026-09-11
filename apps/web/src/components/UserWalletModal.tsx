@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
+import { formatXecSats } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
 type View = 'auto' | 'create' | 'restore' | 'backup' | 'unlock' | 'menu';
@@ -225,19 +226,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
           </div>
         ) : effectiveView === 'menu' ? (
           <div className="wallet-menu">
-            <div className="wallet-balance-grid">
+            <div className="wallet-balance-grid wallet-balance-grid--single">
               <div className="wallet-balance-card">
                 <span className="wallet-balance-label">XEC</span>
                 <span className="wallet-balance-value">
-                  {wallet.balances
-                    ? (Number(wallet.balances.xecSats) / 100).toLocaleString()
-                    : '—'}
-                </span>
-              </div>
-              <div className="wallet-balance-card">
-                <span className="wallet-balance-label">PAW</span>
-                <span className="wallet-balance-value">
-                  {wallet.balances ? wallet.balances.pawAtoms.toString() : '—'}
+                  {formatXecSats(wallet.balances?.xecSats)}
                 </span>
               </div>
             </div>
