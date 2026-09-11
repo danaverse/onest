@@ -80,6 +80,7 @@ Configure the following secrets in GitHub (**Settings → Secrets and variables 
 
 - `TEST_SSH_HOST`: IP or domain of the test VM (`154.53.59.31`)
 - `TEST_SSH_KEY`: The SSH private key generated for deployment (`ed25519` PEM format)
+- `TEST_DESK_SEEDS`: BIP39 mnemonic for the test mint desk. Used to create **tPAW** and fund `/etc/onest/mint.env`. Never point the test site at live WLotus.
 
 #### Optional Variables / Secrets:
 - `TEST_SSH_USER`: SSH user (default `deploy`, following least-privilege security best practices)
