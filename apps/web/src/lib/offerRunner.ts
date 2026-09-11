@@ -10,6 +10,7 @@ import {
   fetchChallenge,
   submitMinedOffer,
   type BurnKind,
+  type OfferOk,
 } from './offerApi.js';
 import { mineInWorker } from './mineRunner.js';
 import { setOfferingBlocksPwaReload } from './pwaReloadGate.js';
@@ -48,41 +49,63 @@ async function waitWithCountdown(
   }
 }
 
+/** A desk restart loses in-memory challenges; re-challenge and re-mine. */
+const RETRYABLE_CHALLENGE = /invalid or expired challenge|tip_race_lost/i;
+
+async function challengeMineAndSubmit(
+  input: SponsoredOfferInput,
+  onProgress?: (message: string) => void,
+): Promise<OfferOk> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      onProgress?.('Requesting PoW challenge...');
+      const challenge = await fetchChallenge({
+        kind: input.kind,
+        note: input.note,
+        parentBurnTxid: input.parentBurnTxid,
+        contentHash: input.contentHash,
+        postHash: input.postHash,
+        direction: input.direction,
+      });
+
+      onProgress?.(`Mining PoW (${challenge.bits} bits)...`);
+      const mined = await mineInWorker({
+        powPrefixHex: challenge.powPrefixHex,
+        bits: challenge.bits,
+        nonceLength: challenge.nonceLength,
+        onProgress: p => {
+          onProgress?.(
+            `Mining PoW: ${p.attempts.toLocaleString()} attempts (${p.hashrateHps.toLocaleString()} H/s)`,
+          );
+        },
+      });
+
+      onProgress?.('Submitting mined offer to desk...');
+      return await submitMinedOffer({
+        challengeId: challenge.challengeId,
+        nonceHex: mined.nonceHex,
+        powMs: mined.elapsedMs,
+        powAttempts: mined.attempts,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (attempt < 3 && RETRYABLE_CHALLENGE.test(message)) {
+        onProgress?.('The desk reset the challenge — retrying...');
+        await sleep(1_000);
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 export async function runSponsoredOffer(
   input: SponsoredOfferInput,
 ): Promise<SponsoredOfferResult> {
   const { onProgress } = input;
   setOfferingBlocksPwaReload(true);
   try {
-    onProgress?.('Requesting PoW challenge...');
-    const challenge = await fetchChallenge({
-      kind: input.kind,
-      note: input.note,
-      parentBurnTxid: input.parentBurnTxid,
-      contentHash: input.contentHash,
-      postHash: input.postHash,
-      direction: input.direction,
-    });
-
-    onProgress?.(`Mining PoW (${challenge.bits} bits)...`);
-    const mined = await mineInWorker({
-      powPrefixHex: challenge.powPrefixHex,
-      bits: challenge.bits,
-      nonceLength: challenge.nonceLength,
-      onProgress: p => {
-        onProgress?.(
-          `Mining PoW: ${p.attempts.toLocaleString()} attempts (${p.hashrateHps.toLocaleString()} H/s)`,
-        );
-      },
-    });
-
-    onProgress?.('Submitting mined offer to desk...');
-    const submitted = await submitMinedOffer({
-      challengeId: challenge.challengeId,
-      nonceHex: mined.nonceHex,
-      powMs: mined.elapsedMs,
-      powAttempts: mined.attempts,
-    });
+    const submitted = await challengeMineAndSubmit(input, onProgress);
 
     if (!submitted.burnPending || !submitted.burnToken) {
       return {
