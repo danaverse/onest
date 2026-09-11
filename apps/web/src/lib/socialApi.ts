@@ -155,6 +155,24 @@ export async function fetchFeed(
   return res.json();
 }
 
+export interface MyPetSummary {
+  txid: string;
+  name: string;
+  species: string;
+  tributes: number;
+  at: string;
+}
+
+/** Pet profiles whose root burn was sent by this wallet address. */
+export async function fetchMyPets(address: string): Promise<MyPetSummary[]> {
+  const res = await fetch(
+    `${apiBase()}/api/pets?address=${encodeURIComponent(address)}`,
+  );
+  if (!res.ok) throw await errorFrom(res, 'My pets');
+  const data = await res.json();
+  return data.pets ?? [];
+}
+
 export async function fetchPetPosts(
   petRootTxid: string,
   limit = 30,

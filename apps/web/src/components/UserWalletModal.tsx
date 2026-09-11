@@ -8,6 +8,32 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 14)}…${address.slice(-4)}`;
 }
 
+/** Numeric PIN field: 4–12 digits, no letters, keypad on mobile. */
+function PinInput(props: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  autoFocus?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <input
+      type="password"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="off"
+      maxLength={12}
+      minLength={4}
+      required
+      autoFocus={props.autoFocus}
+      disabled={props.disabled}
+      value={props.value}
+      placeholder={props.placeholder}
+      onChange={e => props.onChange(e.target.value.replace(/\D/g, '').slice(0, 12))}
+    />
+  );
+}
+
 export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
   const { t } = useLocale();
   const wallet = useWallet();
@@ -20,6 +46,9 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
   const [done, setDone] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [tickNow, setTickNow] = useState(Date.now());
 
   useEffect(() => {
     if (!props.open) return;
@@ -31,15 +60,28 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
     setDone(false);
     setMnemonic('');
     setCopied(false);
+    setFailedAttempts(0);
+    setCooldownUntil(0);
     setView('auto');
   }, [props.open]);
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const timer = setInterval(() => setTickNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil]);
 
   if (!props.open) return null;
 
   const words = mnemonic ? mnemonic.split(' ') : [];
+  const pinValid = /^\d{4,12}$/.test(passphrase);
   const canSubmitPass =
-    passphrase.length >= 8 && (view !== 'create' || passphrase === confirm) && saved;
+    pinValid && (view !== 'create' || passphrase === confirm) && saved;
   const error = localError ?? wallet.error;
+  const cooldownRemaining = Math.max(
+    0,
+    Math.ceil((cooldownUntil - tickNow) / 1000),
+  );
 
   function downloadWords() {
     const body = `${t('seedPhrase')}\n\n${mnemonic}\n\n${t('seedWarning')}\n`;
@@ -78,7 +120,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
       return;
     }
     if (passphrase !== confirm) {
-      setLocalError(t('passphraseMismatch'));
+      setLocalError(t('pinMismatch'));
+      return;
+    }
+    if (!pinValid) {
+      setLocalError(t('pinHint'));
       return;
     }
     try {
@@ -91,10 +137,16 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
 
   async function handleUnlock(e: React.FormEvent) {
     e.preventDefault();
+    if (cooldownRemaining > 0) return;
     try {
       await wallet.unlock(passphrase);
+      setFailedAttempts(0);
     } catch {
-      /* error surfaced via context */
+      const next = failedAttempts + 1;
+      setFailedAttempts(next);
+      if (next >= 3) {
+        setCooldownUntil(Date.now() + 15_000);
+      }
     }
   }
 
@@ -253,24 +305,20 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
               {t('iveSavedIt')}
             </label>
             <div className="form-group">
-              <label>{t('passphrase')}</label>
-              <input
-                type="password"
+              <label>{t('pin')}</label>
+              <PinInput
                 value={passphrase}
-                minLength={8}
-                required
-                onChange={e => setPassphrase(e.target.value)}
-                placeholder={t('passphraseHint')}
+                onChange={setPassphrase}
+                placeholder={t('pinHint')}
+                disabled={wallet.busy}
               />
             </div>
             <div className="form-group">
-              <label>{t('confirmPassphrase')}</label>
-              <input
-                type="password"
+              <label>{t('confirmPin')}</label>
+              <PinInput
                 value={confirm}
-                minLength={8}
-                required
-                onChange={e => setConfirm(e.target.value)}
+                onChange={setConfirm}
+                disabled={wallet.busy}
               />
             </div>
             {error && <div className="error-box">{error}</div>}
@@ -296,23 +344,20 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
               />
             </div>
             <div className="form-group">
-              <label>{t('passphrase')}</label>
-              <input
-                type="password"
+              <label>{t('pin')}</label>
+              <PinInput
                 value={passphrase}
-                minLength={8}
-                required
-                onChange={e => setPassphrase(e.target.value)}
+                onChange={setPassphrase}
+                placeholder={t('pinHint')}
+                disabled={wallet.busy}
               />
             </div>
             <div className="form-group">
-              <label>{t('confirmPassphrase')}</label>
-              <input
-                type="password"
+              <label>{t('confirmPin')}</label>
+              <PinInput
                 value={confirm}
-                minLength={8}
-                required
-                onChange={e => setConfirm(e.target.value)}
+                onChange={setConfirm}
+                disabled={wallet.busy}
               />
             </div>
             {error && <div className="error-box">{error}</div>}
@@ -329,12 +374,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
           <form onSubmit={handleReveal}>
             <p className="pow-hint">{t('backupHint')}</p>
             <div className="form-group">
-              <label>{t('passphrase')}</label>
-              <input
-                type="password"
+              <label>{t('pin')}</label>
+              <PinInput
                 value={passphrase}
-                required
-                onChange={e => setPassphrase(e.target.value)}
+                onChange={setPassphrase}
+                disabled={wallet.busy}
               />
             </div>
             {error && <div className="error-box">{error}</div>}
@@ -365,21 +409,29 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
               </code>
             </div>
             <div className="form-group">
-              <label>{t('passphrase')}</label>
-              <input
-                type="password"
+              <label>{t('pin')}</label>
+              <PinInput
                 value={passphrase}
-                required
+                onChange={setPassphrase}
                 autoFocus
-                onChange={e => setPassphrase(e.target.value)}
+                disabled={wallet.busy || cooldownRemaining > 0}
               />
             </div>
             {error && <div className="error-box">{error}</div>}
+            {cooldownRemaining > 0 && (
+              <p className="pin-cooldown">
+                {t('pinCooldown', { seconds: cooldownRemaining })}
+              </p>
+            )}
             <div className="modal-actions">
               <button type="button" className="btn-secondary" onClick={close}>
                 {t('cancel')}
               </button>
-              <button type="submit" className="btn-primary" disabled={wallet.busy}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={wallet.busy || cooldownRemaining > 0 || passphrase.length < 4}
+              >
                 {t('unlockWallet')}
               </button>
             </div>

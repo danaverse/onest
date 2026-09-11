@@ -393,6 +393,23 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && normPath === '/api/pets') {
+      const address = (url.searchParams.get('address') || '').trim().toLowerCase();
+      if (!address) {
+        json(res, 400, { error: 'address required' });
+        return;
+      }
+      const pets = store.petsForSender(address).map(g => ({
+        txid: g.originalBurnTxid,
+        name: profileBareNameFromNote(g.originalNote) || 'Beloved pet',
+        species: parseAnimalProfileNote(g.originalNote)?.species || '',
+        tributes: g.totalBurns,
+        at: g.at,
+      }));
+      json(res, 200, { ok: true, pets });
+      return;
+    }
+
     if (req.method === 'GET' && normPath.startsWith('/api/pets/')) {
       const rest = normPath.slice('/api/pets/'.length);
       const rootTxid = normalizeHex64(rest.replace(/\/posts$/, ''));

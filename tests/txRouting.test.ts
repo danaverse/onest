@@ -96,9 +96,16 @@ describe('tx routing', () => {
     const tx = fakeTx({ txid: '11'.repeat(32), token: true, blockHeight: 10, blockTs: 1000 });
     const push = pushOf(memorialPushdata('Bella', OFFERING_ID_PAW));
 
-    const first = routeDanaTx({ tx, tokenId: TOKEN, push, burnStore: burns });
+    const first = routeDanaTx({
+      tx,
+      tokenId: TOKEN,
+      push,
+      burnStore: burns,
+      burnedBy: 'ECASH:QQWallet',
+    });
     expect(first.memorial).toBe(true);
     expect(burns.recent(10)).toHaveLength(1);
+    expect(burns.recent(10)[0]!.senderAddress).toBe('ecash:qqwallet');
 
     const second = routeDanaTx({ tx, tokenId: TOKEN, push, burnStore: burns });
     expect(second.memorial).toBe(false);

@@ -27,6 +27,8 @@ export interface IndexedBurn {
   blockTimestamp: number | null;
   timeFirstSeen: string;
   burnAtoms?: string;
+  /** On-chain sender of the burn tx (lowercased); used for "my pets". */
+  senderAddress?: string;
 }
 
 export interface MemorialGroup {
@@ -165,6 +167,18 @@ export class BurnStore {
       });
     }
     return out;
+  }
+
+  /** Pet profiles whose root burn was sent by `address` (wallet-paid). */
+  petsForSender(address: string): MemorialGroup[] {
+    const want = address.trim().toLowerCase();
+    if (!want) return [];
+    return this.groups().filter(g => {
+      const root = g.burns.find(
+        b => b.burnTxid.toLowerCase() === g.originalBurnTxid.toLowerCase(),
+      );
+      return root?.senderAddress?.toLowerCase() === want;
+    });
   }
 
   groupForRoot(txid: string): MemorialGroup | null {

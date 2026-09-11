@@ -79,4 +79,71 @@ describe('BurnStore', () => {
     expect(searchRes.length).toBe(1);
     expect(searchRes[0]!.originalBurnTxid).toBe(rootTxid);
   });
+
+  it('lists pet profiles created (root burn sent) by a wallet address', () => {
+    const store = new BurnStore(testStorePath);
+    const mine = '3'.repeat(64);
+    const sponsored = '4'.repeat(64);
+    const other = '5'.repeat(64);
+
+    const noteFor = (name: string) =>
+      encodeAnimalProfileNote({
+        species: 'cat',
+        name,
+        note: '',
+        breed: '',
+        birthDate: '',
+        passingDate: '',
+        location: '',
+        memorialPlace: '',
+        relationshipType: '',
+        relatedTxid: '',
+        relationships: [],
+        kind: 'memorial',
+        dateCalendar: 'solar',
+      });
+
+    store.insert({
+      burnTxid: mine,
+      tokenId: 't'.repeat(64),
+      note: noteFor('Mine'),
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: mine,
+      blockHeight: 1,
+      blockTimestamp: 1700000000,
+      timeFirstSeen: new Date().toISOString(),
+      senderAddress: 'ecash:qqwallet',
+    });
+    store.insert({
+      burnTxid: sponsored,
+      tokenId: 't'.repeat(64),
+      note: noteFor('Sponsored'),
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: sponsored,
+      blockHeight: 2,
+      blockTimestamp: 1700000001,
+      timeFirstSeen: new Date().toISOString(),
+      senderAddress: 'ecash:qqdesk',
+    });
+    store.insert({
+      burnTxid: other,
+      tokenId: 't'.repeat(64),
+      note: noteFor('Tribute'),
+      offeringId: 'paw',
+      version: 1,
+      originalBurnTxid: sponsored,
+      blockHeight: 3,
+      blockTimestamp: 1700000002,
+      timeFirstSeen: new Date().toISOString(),
+      senderAddress: 'ecash:qqwallet',
+    });
+
+    const pets = store.petsForSender('ECASH:QQWALLET');
+    expect(pets.map(g => g.originalBurnTxid)).toEqual([mine]);
+    expect(pets[0]!.totalBurns).toBe(1);
+    expect(store.petsForSender('ecash:qqnobody')).toHaveLength(0);
+    expect(store.petsForSender('')).toHaveLength(0);
+  });
 });

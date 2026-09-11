@@ -1,15 +1,31 @@
 /**
- * Passphrase-encrypted seed vault primitives.
+ * PIN-encrypted seed vault primitives.
  *
  * AES-GCM with a PBKDF2-SHA256 derived key. Pure WebCrypto so the same code
  * runs in the browser (IndexedDB stores the blob) and in Node tests.
- * The passphrase and mnemonic never leave this module.
+ *
+ * The KDF input is `pin \x1f pepper` when a device pepper is supplied: the
+ * pepper lives in the local vault store, so a copied vault blob alone cannot
+ * be brute-forced against the (short) PIN offline. The PIN and mnemonic never
+ * leave this module.
  */
 
 export const SEED_VAULT_VERSION = 1;
 export const PBKDF2_ITERATIONS = 600_000;
 export const SALT_BYTES = 16;
 export const IV_BYTES = 12;
+export const MIN_PIN_LENGTH = 4;
+export const MAX_PIN_LENGTH = 12;
+export const PIN_FIELD_SEP = '\u001f';
+
+export function isValidPin(pin: string): boolean {
+  const p = String(pin || '').trim();
+  return (
+    p.length >= MIN_PIN_LENGTH &&
+    p.length <= MAX_PIN_LENGTH &&
+    /^\d+$/.test(p)
+  );
+}
 
 export interface EncryptedSeedBlob {
   version: typeof SEED_VAULT_VERSION;
@@ -62,20 +78,28 @@ async function deriveKey(
   );
 }
 
+function kdfSecret(pin: string, pepper?: string): string {
+  const cleanPin = String(pin || '').trim();
+  if (!cleanPin) throw new Error('PIN required');
+  if (cleanPin.length < MIN_PIN_LENGTH) {
+    throw new Error(`PIN must be at least ${MIN_PIN_LENGTH} digits`);
+  }
+  const cleanPepper = pepper?.trim();
+  return cleanPepper ? `${cleanPin}${PIN_FIELD_SEP}${cleanPepper}` : cleanPin;
+}
+
 export async function encryptSeed(
   mnemonic: string,
-  passphrase: string,
-  opts?: { iterations?: number },
+  pin: string,
+  opts?: { iterations?: number; pepper?: string },
 ): Promise<EncryptedSeedBlob> {
   const clean = mnemonic.trim();
   if (!clean) throw new Error('mnemonic required');
-  if (!passphrase || passphrase.length < 8) {
-    throw new Error('passphrase must be at least 8 characters');
-  }
+  const secret = kdfSecret(pin, opts?.pepper);
   const iterations = Math.max(1, opts?.iterations ?? PBKDF2_ITERATIONS);
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-  const key = await deriveKey(passphrase, salt, iterations);
+  const key = await deriveKey(secret, salt, iterations);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: iv as unknown as BufferSource },
     key,
@@ -91,17 +115,19 @@ export async function encryptSeed(
   };
 }
 
-/** Throws when the passphrase is wrong or the blob is corrupt. */
+/** Throws when the PIN is wrong or the blob is corrupt. */
 export async function decryptSeed(
   blob: EncryptedSeedBlob,
-  passphrase: string,
+  pin: string,
+  opts?: { pepper?: string },
 ): Promise<string> {
   if (blob.version !== SEED_VAULT_VERSION) {
     throw new Error(`Unsupported seed vault version: ${blob.version}`);
   }
+  const secret = kdfSecret(pin, opts?.pepper);
   const salt = base64ToBytes(blob.salt);
   const iv = base64ToBytes(blob.iv);
-  const key = await deriveKey(passphrase, salt, blob.iterations);
+  const key = await deriveKey(secret, salt, blob.iterations);
   try {
     const plaintext = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: iv as unknown as BufferSource },
@@ -110,6 +136,6 @@ export async function decryptSeed(
     );
     return new TextDecoder().decode(plaintext);
   } catch {
-    throw new Error('Wrong passphrase');
+    throw new Error('Wrong PIN');
   }
 }

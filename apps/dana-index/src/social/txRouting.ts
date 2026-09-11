@@ -49,6 +49,7 @@ export function indexedBurnFromPush(
   tokenId: string,
   memorial: MemorialFields,
   nowIso = new Date().toISOString(),
+  senderAddress?: string | null,
 ): IndexedBurn | null {
   if (!tx.txid) return null;
   if (memorial.version !== 1 && memorial.version !== 2) return null;
@@ -67,6 +68,7 @@ export function indexedBurnFromPush(
     blockTimestamp: tx.block?.timestamp ? Number(tx.block.timestamp) : null,
     timeFirstSeen: nowIso,
     burnAtoms: burnAtomsFromTx(tx, tokenId),
+    senderAddress: senderAddress?.trim().toLowerCase() || undefined,
   };
 }
 
@@ -118,7 +120,13 @@ export function routeDanaTx(opts: RouteDanaTxOpts): RouteResult {
   if (!txTouchesToken(tx, tokenId)) return NO_ROUTE;
 
   if (push.kind === 'memorial') {
-    const item = indexedBurnFromPush(tx, tokenId, push.memorial, opts.nowIso);
+    const item = indexedBurnFromPush(
+      tx,
+      tokenId,
+      push.memorial,
+      opts.nowIso,
+      opts.burnedBy,
+    );
     if (item && opts.burnStore.insert(item)) {
       return { memorial: true, post: false, vote: false };
     }
