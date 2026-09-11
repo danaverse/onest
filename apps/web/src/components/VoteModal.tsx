@@ -281,7 +281,13 @@ export function VoteModal(props: {
 
         {stage === 'confirm' && (
           locked ? (
-            <div className="vote-pin">
+            <form
+              className="vote-pin inline-unlock"
+              onSubmit={e => {
+                e.preventDefault();
+                if (pin.length >= 4) void onPinComplete(pin);
+              }}
+            >
               <input
                 type="password"
                 inputMode="numeric"
@@ -298,7 +304,14 @@ export function VoteModal(props: {
                   if (pinLength && v.length === pinLength) void onPinComplete(v);
                 }}
               />
-            </div>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={unlocking || busy || pin.length < 4}
+              >
+                {unlocking ? t('loading') : t('voteSubmit')}
+              </button>
+            </form>
           ) : (
             <div className="vote-actions">
               <button
