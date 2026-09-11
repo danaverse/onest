@@ -169,7 +169,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     copyLink: 'Copy link',
     linkCopied: 'Link copied!',
     userProfile: 'User Profile',
-    createUserProfile: 'Create user profile',
+    createUserProfile: 'Create account',
     restoreUserProfile: 'Restore from seed phrase',
     userProfileIntro:
       'Your user profile is a self-custodial XEC + PAW wallet. Create animal profiles from it — no server holds your keys.',
@@ -282,7 +282,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     copyLink: 'Sao chép liên kết',
     linkCopied: 'Đã sao chép!',
     userProfile: 'Hồ sơ người dùng',
-    createUserProfile: 'Tạo hồ sơ người dùng',
+    createUserProfile: 'Tạo tài khoản',
     restoreUserProfile: 'Khôi phục từ cụm từ hạt giống',
     userProfileIntro:
       'Hồ sơ người dùng là ví XEC + PAW tự quản. Tạo hồ sơ thú cưng từ ví này — không máy chủ nào giữ khoá của bạn.',
@@ -394,7 +394,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     copyLink: '复制链接',
     linkCopied: '已复制！',
     userProfile: '用户资料',
-    createUserProfile: '创建用户资料',
+    createUserProfile: '创建账户',
     restoreUserProfile: '从助记词恢复',
     userProfileIntro:
       '用户资料是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
