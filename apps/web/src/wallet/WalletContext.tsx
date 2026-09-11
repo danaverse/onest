@@ -30,6 +30,8 @@ export type WalletStatus = 'loading' | 'none' | 'locked' | 'unlocked';
 interface WalletCtx {
   status: WalletStatus;
   address: string | null;
+  /** Stored PIN length (metadata) for auto-unlock at full entry. */
+  pinLength: number | null;
   balances: WalletBalances | null;
   wallet: Wallet | null;
   busy: boolean;
@@ -51,6 +53,7 @@ const Ctx = createContext<WalletCtx | null>(null);
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<WalletStatus>('loading');
   const [address, setAddress] = useState<string | null>(null);
+  const [pinLength, setPinLength] = useState<number | null>(null);
   const [balances, setBalances] = useState<WalletBalances | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,6 +66,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (vault) {
           setAddress(vault.address);
+          setPinLength(vault.pinLength ?? null);
           setStatus('locked');
         } else {
           setStatus('none');
@@ -121,7 +125,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const createProfile = useCallback(
     (mnemonic: string, passphrase: string) =>
       run(async () => {
-        await createVault(mnemonic, passphrase);
+        const vault = await createVault(mnemonic, passphrase);
+        setPinLength(vault.pinLength ?? passphrase.trim().length);
         await activate(await walletFromMnemonic(mnemonic));
       }),
     [activate, run],
@@ -133,7 +138,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (!validateUserMnemonic(mnemonic)) {
           throw new Error('Invalid seed phrase');
         }
-        await createVault(mnemonic, passphrase);
+        const vault = await createVault(mnemonic, passphrase);
+        setPinLength(vault.pinLength ?? passphrase.trim().length);
         await activate(await walletFromMnemonic(mnemonic));
       }),
     [activate, run],
@@ -166,6 +172,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setWallet(null);
         setBalances(null);
         setAddress(null);
+        setPinLength(null);
         setStatus('none');
       }),
     [run],
@@ -176,6 +183,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       value={{
         status,
         address,
+        pinLength,
         balances,
         wallet,
         busy,

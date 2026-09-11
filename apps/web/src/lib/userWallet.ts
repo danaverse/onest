@@ -79,6 +79,7 @@ export async function createVault(
     address: wallet.address,
     createdAt: Date.now(),
     peppered: true,
+    pinLength: pin.trim().length,
   };
   await saveVault(vault);
   return vault;
