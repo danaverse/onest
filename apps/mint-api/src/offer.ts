@@ -64,6 +64,7 @@ import {
   minPrayWaitUntilMs,
   parseMinPraySeconds,
 } from '../../../src/lib/minPray.js';
+import { resolveRemintLocktime } from '../../../src/mint/remintLocktime.js';
 import {
   assertDeskTokenId,
 } from '../../../src/params/pawTokens.js';
@@ -449,7 +450,7 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
   );
 
   const mtp = await getMedianTimePast(chronik);
-  const locktime = Math.max(baton.creatingLockTime, mtp.mtp);
+  const locktime = resolveRemintLocktime(baton.creatingLockTime, mtp.mtp);
 
   const contract = await matchCovenantToBaton(
     baton,
