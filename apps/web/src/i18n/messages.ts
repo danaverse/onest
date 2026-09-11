@@ -70,6 +70,7 @@ export type MessageKey =
   | 'pinCooldown'
   | 'tabHome'
   | 'tabMyPets'
+  | 'myPetsTitle'
   | 'myPetsEmpty'
   | 'myPetsLocked'
   | 'invalidSeed'
@@ -173,6 +174,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     pinCooldown: 'Too many attempts — try again in {seconds}s',
     tabHome: 'Home',
     tabMyPets: 'My pets',
+    myPetsTitle: 'My pets',
     myPetsEmpty: 'No pet profiles yet. Create one from your wallet to start.',
     myPetsLocked: 'Unlock your user profile to see your pets.',
     invalidSeed: 'Invalid seed phrase',
@@ -277,7 +279,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     pinMismatch: 'Mã PIN không khớp',
     pinCooldown: 'Sai quá nhiều lần — thử lại sau {seconds} giây',
     tabHome: 'Trang chủ',
-    tabMyPets: 'Trang thú cưng',
+    tabMyPets: 'Thú cưng',
+    myPetsTitle: 'Thú cưng của tôi',
     myPetsEmpty: 'Chưa có hồ sơ thú cưng. Hãy tạo từ ví của bạn.',
     myPetsLocked: 'Mở khoá hồ sơ người dùng để xem thú cưng.',
     invalidSeed: 'Cụm từ hạt giống không hợp lệ',
@@ -381,6 +384,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     pinCooldown: '尝试次数过多——请在 {seconds} 秒后重试',
     tabHome: '首页',
     tabMyPets: '我的宠物',
+    myPetsTitle: '我的宠物',
     myPetsEmpty: '还没有宠物档案，请用钱包创建。',
     myPetsLocked: '解锁用户资料后即可查看你的宠物。',
     invalidSeed: '助记词无效',
