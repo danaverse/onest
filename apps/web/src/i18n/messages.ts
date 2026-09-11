@@ -174,7 +174,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     userProfileIntro:
       'Your account is a self-custodial XEC and PAW wallet. Create animal profiles from this account — no server holds your keys.',
     userProfileRequired:
-      'A user profile is required to create animal profiles. Your wallet burns 1 PAW and pays the desk listing fee.',
+      'An account is required to create animal profiles. Your wallet burns 1 PAW and pays the desk listing fee.',
     pin: 'PIN',
     confirmPin: 'Confirm PIN',
     pinHint: '4–12 digits',
@@ -184,7 +184,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     tabMyPets: 'My pets',
     myPetsTitle: 'My pets',
     myPetsEmpty: 'No pet profiles yet. Create one from your wallet to start.',
-    myPetsLocked: 'Unlock your user profile to see your pets.',
+    myPetsLocked: 'Unlock your account to see your pets.',
     invalidSeed: 'Invalid seed phrase',
     seedPhrase: 'Seed phrase',
     seedWarning:
@@ -195,7 +195,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletAddress: 'Wallet address',
     refreshBalances: 'Refresh balances',
     removeWallet: 'Remove wallet from this device',
-    walletReady: 'User profile ready!',
+    walletReady: 'Account ready!',
     walletReadyHint: 'Your wallet is unlocked. You can now create animal profiles.',
     loadingWallet: 'Opening your wallet...',
     backupHint: 'Enter your PIN to reveal your seed phrase.',
@@ -287,7 +287,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     userProfileIntro:
       'Tài khoản của bạn là ví XEC và PAW tự quản. Tạo hồ sơ thú cưng từ tài khoản này - không máy chủ nào giữ khóa của bạn.',
     userProfileRequired:
-      'Cần có hồ sơ người dùng để tạo hồ sơ thú cưng. Ví sẽ đốt 1 PAW và trả phí niêm yết cho bàn.',
+      'Cần có tài khoản để tạo hồ sơ thú cưng. Ví sẽ đốt 1 PAW và trả phí niêm yết cho bàn.',
     pin: 'Mã PIN',
     confirmPin: 'Nhập lại mã PIN',
     pinHint: '4–12 chữ số',
@@ -297,7 +297,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     tabMyPets: 'Thú cưng',
     myPetsTitle: 'Thú cưng của tôi',
     myPetsEmpty: 'Chưa có hồ sơ thú cưng. Hãy tạo từ ví của bạn.',
-    myPetsLocked: 'Mở khoá hồ sơ người dùng để xem thú cưng.',
+    myPetsLocked: 'Mở khóa tài khoản để xem thú cưng.',
     invalidSeed: 'Cụm từ hạt giống không hợp lệ',
     seedPhrase: 'Cụm từ hạt giống',
     seedWarning:
@@ -308,7 +308,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletAddress: 'Địa chỉ ví',
     refreshBalances: 'Cập nhật số dư',
     removeWallet: 'Xoá ví khỏi thiết bị này',
-    walletReady: 'Hồ sơ người dùng đã sẵn sàng!',
+    walletReady: 'Tài khoản đã sẵn sàng!',
     walletReadyHint: 'Ví đã mở khoá. Bạn có thể tạo hồ sơ thú cưng.',
     loadingWallet: 'Đang mở ví...',
     backupHint: 'Nhập mã PIN để xem cụm từ hạt giống.',
@@ -398,7 +398,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     restoreUserProfile: '从助记词恢复',
     userProfileIntro:
       '你的账户是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
-    userProfileRequired: '创建宠物档案需要用户资料。钱包将销毁 1 PAW 并支付上架费。',
+    userProfileRequired: '创建宠物档案需要账户。钱包将销毁 1 PAW 并支付上架费。',
     pin: 'PIN 码',
     confirmPin: '确认 PIN 码',
     pinHint: '4–12 位数字',
@@ -408,7 +408,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     tabMyPets: '我的宠物',
     myPetsTitle: '我的宠物',
     myPetsEmpty: '还没有宠物档案，请用钱包创建。',
-    myPetsLocked: '解锁用户资料后即可查看你的宠物。',
+    myPetsLocked: '解锁账户后即可查看你的宠物。',
     invalidSeed: '助记词无效',
     seedPhrase: '助记词',
     seedWarning: '请将这 12 个单词抄写并离线保存。任何拿到它的人都能控制你的钱包。我们无法恢复。',
@@ -418,7 +418,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     walletAddress: '钱包地址',
     refreshBalances: '刷新余额',
     removeWallet: '从此设备移除钱包',
-    walletReady: '用户资料已就绪！',
+    walletReady: '账户已就绪！',
     walletReadyHint: '钱包已解锁，现在可以创建宠物档案。',
     loadingWallet: '正在打开钱包...',
     backupHint: '输入 PIN 码以显示助记词。',
