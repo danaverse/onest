@@ -129,6 +129,25 @@ body {
   font-size: 0.85rem;
 }
 
+.btn-header-search {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.btn-header-search:hover,
+.btn-header-search.is-active {
+  border-color: var(--accent);
+}
+
+.header-search {
+  margin-bottom: 1rem;
+}
+
 .hero-action {
   margin-bottom: 1.5rem;
 }
