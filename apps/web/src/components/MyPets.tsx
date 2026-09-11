@@ -44,7 +44,7 @@ export function MyPets(props: {
   return (
     <section className="my-pets-section">
       <div className="feed-head">
-        <h2>{t('tabMyPets')}</h2>
+        <h2>{t('myPetsTitle')}</h2>
         {wallet.status === 'unlocked' && (
           <button
             type="button"
