@@ -340,6 +340,7 @@ export default function App() {
         initialPetTxid={composer.petTxid}
         onClose={() => setComposer({ open: false })}
         onCreateProfile={() => setProfileModal({ open: true })}
+        onRequestWallet={() => setWalletOpen(true)}
         onSuccess={() => {
           loadPosts();
           loadFeed();
