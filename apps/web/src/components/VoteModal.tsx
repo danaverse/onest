@@ -16,6 +16,7 @@ import {
   type WalletBalances,
 } from '../lib/userWallet.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
+import { useWallet } from '../wallet/WalletContext.js';
 import { BrandMark } from './BrandMark.js';
 
 type VoteMethod = 'paw' | 'xec' | 'pow';
@@ -40,27 +41,39 @@ function sleep(ms: number): Promise<void> {
 export function VoteModal(props: {
   open: boolean;
   post: FeedPost;
-  wallet: Wallet;
   onClose: () => void;
   onVoted?: (post: FeedPost) => void;
   onError?: (message: string) => void;
 }) {
   const { t } = useLocale();
+  const {
+    status,
+    wallet,
+    unlock,
+    pinLength,
+  } = useWallet();
   const [fee, setFee] = useState<VoteFee | null>(null);
   const [method, setMethod] = useState<VoteMethod | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+
+  const locked = status === 'locked';
 
   useEffect(() => {
     if (!props.open) return;
     setError(null);
-    setStatus(null);
+    setStatusMsg(null);
     setMethod(null);
+    setPin('');
     let cancelled = false;
     Promise.all([
       fetchVoteFee().catch(() => null),
-      fetchWalletBalances(props.wallet).catch(() => null),
+      status === 'unlocked' && wallet
+        ? fetchWalletBalances(wallet).catch(() => null)
+        : Promise.resolve(null),
     ]).then(([feeRes, balances]) => {
       if (cancelled) return;
       setFee(feeRes);
@@ -73,12 +86,13 @@ export function VoteModal(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.open, props.wallet]);
+  }, [props.open, status, wallet]);
 
   if (!props.open) return null;
 
-  const hint =
-    method === 'paw'
+  const hint = locked
+    ? t('voteLockedHint')
+    : method === 'paw'
       ? t('votePawHint')
       : method === 'xec'
         ? fee
@@ -88,14 +102,38 @@ export function VoteModal(props: {
           ? t('powHint')
           : null;
 
+  async function unlockNow(value: string): Promise<Wallet | null> {
+    if (value.length < 4) return null;
+    setUnlocking(true);
+    setError(null);
+    try {
+      const unlocked = await unlock(value);
+      setPin('');
+      return unlocked;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Wrong PIN');
+      return null;
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   async function cast(direction: VoteDirection) {
-    if (busy) return;
+    if (busy || unlocking) return;
     setBusy(true);
     setError(null);
     try {
-      const balances = await fetchWalletBalances(props.wallet).catch(
-        () => null,
-      );
+      let voter = status === 'unlocked' ? wallet : null;
+      if (!voter) {
+        if (pin.length < 4) {
+          setError(t('votePinNeeded'));
+          return;
+        }
+        voter = await unlockNow(pin);
+        if (!voter) return;
+      }
+
+      const balances = await fetchWalletBalances(voter).catch(() => null);
       const useMethod = balances
         ? chooseMethod(balances, fee ? BigInt(fee.xecSats) : null)
         : 'pow';
@@ -103,28 +141,28 @@ export function VoteModal(props: {
 
       if (useMethod === 'paw') {
         await createVoteWithPaw({
-          wallet: props.wallet,
+          wallet: voter,
           postId: props.post.id,
           direction,
-          onProgress: setStatus,
+          onProgress: setStatusMsg,
         });
       } else if (useMethod === 'xec') {
         await createPaidVoteWithXec({
-          wallet: props.wallet,
+          wallet: voter,
           postId: props.post.id,
           direction,
-          onProgress: setStatus,
+          onProgress: setStatusMsg,
         });
       } else {
         await runSponsoredOffer({
           kind: 'vote',
           postHash: props.post.id,
           direction,
-          onProgress: setStatus,
+          onProgress: setStatusMsg,
         });
       }
 
-      setStatus(t('voteCounting'));
+      setStatusMsg(t('voteCounting'));
       const before =
         direction === 1 ? props.post.upvoteAtoms : props.post.downvoteAtoms;
       let fresh: FeedPost | null = null;
@@ -160,7 +198,7 @@ export function VoteModal(props: {
       }
     } finally {
       setBusy(false);
-      setStatus(null);
+      setStatusMsg(null);
     }
   }
 
@@ -189,13 +227,34 @@ export function VoteModal(props: {
         </div>
 
         {error && <div className="error-box">{error}</div>}
-        {status && <div className="status-box">{status}</div>}
+        {statusMsg && <div className="status-box">{statusMsg}</div>}
+
+        {locked && (
+          <div className="vote-pin">
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              maxLength={12}
+              placeholder={t('pinHint')}
+              value={pin}
+              disabled={unlocking || busy}
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+                setPin(v);
+                /* Windows Hello style: unlock as soon as the full PIN is in. */
+                if (pinLength && v.length === pinLength) void unlockNow(v);
+              }}
+            />
+          </div>
+        )}
 
         <div className="vote-choices">
           <button
             type="button"
             className="btn-vote-choice up"
-            disabled={busy}
+            disabled={busy || unlocking}
             onClick={() => cast(1)}
           >
             <span className="vote-choice-arrow">▲</span>
@@ -208,7 +267,7 @@ export function VoteModal(props: {
           <button
             type="button"
             className="btn-vote-choice down"
-            disabled={busy}
+            disabled={busy || unlocking}
             onClick={() => cast(0)}
           >
             <span className="vote-choice-arrow">▼</span>
