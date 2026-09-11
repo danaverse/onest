@@ -164,6 +164,13 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 });
 '
 
+if [[ -f "$NGINX_SRC" ]]; then
+  echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
+  install -m 644 "$NGINX_SRC" "$NGINX_DEST"
+  nginx -t
+  systemctl reload nginx
+fi
+
 echo "provision-test-tpaw: rebuilding PWA with VITE_PAW_TICKER=tPAW and the live token id..."
 export VITE_PAW_TOKEN_ID="$TOKEN_ID"
 export VITE_PAW_TICKER=tPAW
@@ -173,13 +180,6 @@ WEB_DEST="${WEB_DEST:-/var/www/onest-test}"
 mkdir -p "$WEB_DEST"
 rsync -a --delete "$ROOT/apps/web/dist/" "$WEB_DEST/"
 chown -R deploy:deploy "$WEB_DEST" 2>/dev/null || true
-
-if [[ -f "$NGINX_SRC" ]]; then
-  echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
-  install -m 644 "$NGINX_SRC" "$NGINX_DEST"
-  nginx -t
-  systemctl reload nginx
-fi
 
 echo "provision-test-tpaw: done. tPAW is live; WLotus remains on :8787/:8788 for test.wlotus.org."
 echo "TOKEN_ID=${TOKEN_ID}"
