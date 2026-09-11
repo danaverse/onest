@@ -29,6 +29,7 @@ import {
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
 import { createPaidProfile, profileFeeInfo } from './paidProfile.js';
+import { createPaidPost, postFeeInfo } from './paidPost.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -117,6 +118,24 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/profile/fee') {
       json(res, 200, await profileFeeInfo());
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/post/fee') {
+      json(res, 200, await postFeeInfo());
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/post/create') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const result = await createPaidPost({
+        installId,
+        address: String(body.address || ''),
+        paymentTxid: String(body.paymentTxid || ''),
+        contentHash: String(body.contentHash || ''),
+      });
+      json(res, 200, result);
       return;
     }
 

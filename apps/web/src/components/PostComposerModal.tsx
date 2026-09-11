@@ -6,7 +6,8 @@ import {
   pollPostVerified,
   uploadImage,
 } from '../lib/socialApi.js';
-import { runSponsoredOffer } from '../lib/offerRunner.js';
+import { createPaidPostWithXec } from '../lib/paidPost.js';
+import { useWallet } from '../wallet/WalletContext.js';
 
 export interface PetOption {
   txid: string;
@@ -20,8 +21,10 @@ export function PostComposerModal(props: {
   onClose: () => void;
   onSuccess?: () => void;
   onCreateProfile?: () => void;
+  onRequestWallet?: () => void;
 }) {
   const { t } = useLocale();
+  const userWallet = useWallet();
   const [petTxid, setPetTxid] = useState(
     props.initialPetTxid || props.pets[0]?.txid || '',
   );
@@ -55,6 +58,11 @@ export function PostComposerModal(props: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (busy || !petTxid || !caption.trim()) return;
+    if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
+      setErr(t('userProfileRequired'));
+      props.onRequestWallet?.();
+      return;
+    }
     setBusy(true);
     setErr(null);
     setSuccess(null);
@@ -76,8 +84,8 @@ export function PostComposerModal(props: {
         createdAt: Date.now(),
       });
 
-      const result = await runSponsoredOffer({
-        kind: 'post',
+      const result = await createPaidPostWithXec({
+        wallet: userWallet.wallet,
         contentHash: created.contentHash,
         onProgress: setProgress,
       });
@@ -90,7 +98,8 @@ export function PostComposerModal(props: {
         pending: !verified,
       });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not share this moment');
+      const msg = e instanceof Error ? e.message : 'Could not share this moment';
+      setErr(msg === 'POST_NEED_XEC' ? t('postNeedXec') : msg);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -192,7 +201,7 @@ export function PostComposerModal(props: {
 
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
-            {!busy && <p className="pow-hint">{t('postPowHint')}</p>}
+            {!busy && <p className="pow-hint">{t('postFeeHint')}</p>}
 
             <div className="modal-actions">
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">

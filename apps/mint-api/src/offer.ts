@@ -254,7 +254,7 @@ interface PendingBurn {
   waitUntilMs: number;
 }
 
-type OnestDep = {
+export type OnestDep = {
   tokenId: string;
   ticker?: string;
   name?: string;

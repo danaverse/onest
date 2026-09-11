@@ -36,7 +36,8 @@ export type MessageKey =
   | 'photo'
   | 'caption'
   | 'captionPlaceholder'
-  | 'postPowHint'
+  | 'postFeeHint'
+  | 'postNeedXec'
   | 'cancel'
   | 'posting'
   | 'postSubmit'
@@ -140,8 +141,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     photo: 'Photo',
     caption: 'Caption',
     captionPlaceholder: 'A loving memory...',
-    postPowHint:
-      'Your device will do a short proof-of-work and burn 1 PAW to stamp this moment on-chain. Please keep the app open.',
+    postFeeHint:
+      'Posting stamps instantly on-chain: the desk burns 1 PAW for a small XEC fee — no mining wait.',
+    postNeedXec: 'You need a little more XEC to post.',
     cancel: 'Cancel',
     posting: 'Stamping...',
     postSubmit: 'Share moment',
@@ -249,8 +251,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     photo: 'Ảnh',
     caption: 'Chú thích',
     captionPlaceholder: 'Một kỷ niệm thương yêu...',
-    postPowHint:
-      'Máy bạn sẽ khai thác PoW trong giây lát và đốt 1 PAW để ghi khoảnh khắc lên chuỗi. Vui lòng giữ ứng dụng mở.',
+    postFeeHint:
+      'Đăng bài được ghi lên chuỗi ngay: bàn đốt 1 PAW với một khoản phí XEC nhỏ — không cần chờ đào.',
+    postNeedXec: 'Bạn cần thêm một ít XEC để đăng bài.',
     cancel: 'Huỷ',
     posting: 'Đang in dấu...',
     postSubmit: 'Chia sẻ khoảnh khắc',
@@ -358,7 +361,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     photo: '照片',
     caption: '文字',
     captionPlaceholder: '留下爱的记忆...',
-    postPowHint: '设备将进行短暂的算力证明并销毁 1 PAW，将此刻印在链上。请保持应用开启。',
+    postFeeHint: '发布将立即上链：服务台销毁 1 PAW，只需少量 XEC 费用——无需等待挖矿。',
+    postNeedXec: '需要更多 XEC 才能发布。',
     cancel: '取消',
     posting: '正在印下...',
     postSubmit: '分享瞬间',
