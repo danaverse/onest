@@ -28,6 +28,7 @@ import {
   WaitNotElapsedError,
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
+import { createClientMintChallenge, submitClientMint } from './clientMint.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -111,6 +112,39 @@ const server = createServer(async (req, res) => {
       }
       const status = checkRootCreator({ rootBurnTxid: txid, installId });
       json(res, 200, status);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/mint/client/challenge') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const fuelOutIdx = Number(body.fuelOutIdx);
+      if (!Number.isInteger(fuelOutIdx) || fuelOutIdx < 0) {
+        json(res, 400, { error: 'valid fuelOutIdx required' });
+        return;
+      }
+      const challenge = await createClientMintChallenge({
+        installId,
+        address: String(body.address || ''),
+        pkHex: String(body.pkHex || ''),
+        fuelTxid: String(body.fuelTxid || ''),
+        fuelOutIdx,
+      });
+      json(res, 200, challenge);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/mint/client/submit') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const result = await submitClientMint({
+        installId,
+        challengeId: String(body.challengeId || ''),
+        nonceHex: String(body.nonceHex || ''),
+        batonSigHex: String(body.batonSigHex || ''),
+        fuelSigHex: String(body.fuelSigHex || ''),
+      });
+      json(res, 200, result);
       return;
     }
 

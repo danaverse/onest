@@ -92,6 +92,9 @@ export type MessageKey =
   | 'profileFeeHint'
   | 'needPawForProfile'
   | 'needXecForProfile'
+  | 'mintPawFromXec'
+  | 'mintNeedXec'
+  | 'mintDone'
   | 'creatingProfileWallet'
   | 'loading'
   | 'noPagesYet'
@@ -198,6 +201,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Creating an animal profile burns 1 PAW and pays a {atoms}-atom listing fee to the desk, plus XEC network fees from your wallet.',
     needPawForProfile: 'Your wallet needs at least {atoms} PAW (1 burn + listing fee).',
     needXecForProfile: 'Your wallet needs a little XEC for network fees.',
+    mintPawFromXec: 'Mint 108 PAW from XEC',
+    mintNeedXec: 'You need a little more XEC to pay the mint network fees.',
+    mintDone: 'PAW minted! You can create the profile now.',
     creatingProfileWallet: 'Creating your animal profile from your wallet...',
     loading: 'Loading...',
     noPagesYet: 'No pet pages yet. Create the first animal profile to start sharing moments.',
@@ -304,6 +310,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Tạo hồ sơ thú cưng sẽ đốt 1 PAW và trả phí niêm yết {atoms} atom cho bàn, cùng phí mạng XEC từ ví của bạn.',
     needPawForProfile: 'Ví cần ít nhất {atoms} PAW (1 đốt + phí niêm yết).',
     needXecForProfile: 'Ví cần một ít XEC cho phí mạng.',
+    mintPawFromXec: 'Đúc 108 PAW từ XEC',
+    mintNeedXec: 'Bạn cần thêm một ít XEC để trả phí mạng khi đúc PAW.',
+    mintDone: 'Đã đúc PAW! Bây giờ bạn có thể tạo hồ sơ.',
     creatingProfileWallet: 'Đang tạo hồ sơ thú cưng từ ví...',
     loading: 'Đang tải...',
     noPagesYet: 'Chưa có trang thú cưng nào. Hãy tạo hồ sơ đầu tiên để bắt đầu chia sẻ khoảnh khắc.',
@@ -406,6 +415,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     profileFeeHint: '创建宠物档案将销毁 1 PAW，并向服务台支付 {atoms} atom 上架费，另需钱包支付 XEC 网络费。',
     needPawForProfile: '钱包至少需要 {atoms} PAW（1 销毁 + 上架费）。',
     needXecForProfile: '钱包需要少量 XEC 支付网络费。',
+    mintPawFromXec: '用 XEC 铸造 108 PAW',
+    mintNeedXec: '需要更多 XEC 来支付铸造网络费。',
+    mintDone: 'PAW 已铸造！现在可以创建档案了。',
     creatingProfileWallet: '正在用钱包创建宠物档案...',
     loading: '加载中...',
     noPagesYet: '还没有宠物主页。创建第一个宠物档案，开始分享回忆吧。',
