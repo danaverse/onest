@@ -172,7 +172,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     createUserProfile: 'Create account',
     restoreUserProfile: 'Restore from seed phrase',
     userProfileIntro:
-      'Your user profile is a self-custodial XEC + PAW wallet. Create animal profiles from it — no server holds your keys.',
+      'Your account is a self-custodial XEC and PAW wallet. Create animal profiles from this account — no server holds your keys.',
     userProfileRequired:
       'A user profile is required to create animal profiles. Your wallet burns 1 PAW and pays the desk listing fee.',
     pin: 'PIN',
@@ -285,7 +285,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     createUserProfile: 'Tạo tài khoản',
     restoreUserProfile: 'Khôi phục từ cụm từ hạt giống',
     userProfileIntro:
-      'Hồ sơ người dùng là ví XEC + PAW tự quản. Tạo hồ sơ thú cưng từ ví này — không máy chủ nào giữ khoá của bạn.',
+      'Tài khoản của bạn là ví XEC và PAW tự quản. Tạo hồ sơ thú cưng từ tài khoản này - không máy chủ nào giữ khóa của bạn.',
     userProfileRequired:
       'Cần có hồ sơ người dùng để tạo hồ sơ thú cưng. Ví sẽ đốt 1 PAW và trả phí niêm yết cho bàn.',
     pin: 'Mã PIN',
@@ -397,7 +397,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     createUserProfile: '创建账户',
     restoreUserProfile: '从助记词恢复',
     userProfileIntro:
-      '用户资料是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
+      '你的账户是自托管的 XEC + PAW 钱包。用它创建宠物档案——服务器不会保管你的私钥。',
     userProfileRequired: '创建宠物档案需要用户资料。钱包将销毁 1 PAW 并支付上架费。',
     pin: 'PIN 码',
     confirmPin: '确认 PIN 码',
