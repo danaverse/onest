@@ -13,6 +13,7 @@ import {
 import type { Wallet } from 'ecash-wallet';
 import {
   bindWalletProfile,
+  changeVaultPin,
   createVault,
   exportVaultMnemonic,
   fetchWalletBalances,
@@ -43,6 +44,8 @@ interface WalletCtx {
   restoreProfile(mnemonic: string, passphrase: string): Promise<void>;
   /** Returns the unlocked wallet so callers can continue in the same step. */
   unlock(passphrase: string): Promise<Wallet>;
+  /** Re-wrap the vault under a new PIN (wallet stays unlocked). */
+  changePin(currentPin: string, newPin: string): Promise<void>;
   lock(): void;
   refresh(): Promise<void>;
   backup(passphrase: string): Promise<string>;
@@ -156,6 +159,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [activate, run],
   );
 
+  const changePin = useCallback(
+    (currentPin: string, newPin: string) =>
+      run(async () => {
+        const vault = await changeVaultPin(currentPin, newPin);
+        setPinLength(vault.pinLength ?? newPin.trim().length);
+      }),
+    [run],
+  );
+
   const lock = useCallback(() => {
     setWallet(null);
     setBalances(null);
@@ -196,6 +208,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         createProfile,
         restoreProfile,
         unlock,
+        changePin,
         lock,
         refresh,
         backup,

@@ -76,9 +76,9 @@ export async function ensureDevicePepper(): Promise<string> {
   return created;
 }
 
-export async function saveVault(vault: Omit<StoredVault, 'peppered'>): Promise<void> {
+export async function saveVault(vault: StoredVault): Promise<void> {
   await withStore('readwrite', store =>
-    store.put({ ...vault, peppered: true }, VAULT_KEY) as IDBRequest<IDBValidKey>,
+    store.put(vault, VAULT_KEY) as IDBRequest<IDBValidKey>,
   );
 }
 

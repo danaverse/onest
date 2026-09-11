@@ -115,6 +115,13 @@ export type MessageKey =
   | 'openUserProfile'
   | 'copyAddress'
   | 'depositHint'
+  | 'receiveXec'
+  | 'receiveHint'
+  | 'changePin'
+  | 'currentPin'
+  | 'newPin'
+  | 'pinChanged'
+  | 'pinSame'
   | 'back';
 
 export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
@@ -241,6 +248,13 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     copyAddress: 'Copy address',
     depositHint:
       'Send XEC (for network fees) and PAW (6 burn + 6-atom listing fee) to this address before creating an animal profile.',
+    receiveXec: 'Receive XEC',
+    receiveHint: 'Scan this QR code with another wallet to send XEC to this address.',
+    changePin: 'Change PIN',
+    currentPin: 'Current PIN',
+    newPin: 'New PIN',
+    pinChanged: 'PIN updated.',
+    pinSame: 'New PIN must be different from the current PIN',
     back: 'Back',
   },
   vi: {
@@ -366,6 +380,13 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     copyAddress: 'Sao chép địa chỉ',
     depositHint:
       'Hãy gửi XEC (phí mạng) và PAW (6 đốt + phí niêm yết 6 atom) vào địa chỉ này trước khi tạo hồ sơ thú cưng.',
+    receiveXec: 'Nhận XEC',
+    receiveHint: 'Quét mã QR này bằng ví khác để gửi XEC đến địa chỉ này.',
+    changePin: 'Đổi mã PIN',
+    currentPin: 'Mã PIN hiện tại',
+    newPin: 'Mã PIN mới',
+    pinChanged: 'Đã cập nhật mã PIN.',
+    pinSame: 'Mã PIN mới phải khác mã PIN hiện tại',
     back: 'Quay lại',
   },
   zh: {
@@ -484,6 +505,13 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     openUserProfile: '打开账户',
     copyAddress: '复制地址',
     depositHint: '创建宠物档案前，请先向此地址发送 XEC（网络费）和 PAW（6 销毁 + 6 atom 上架费）。',
+    receiveXec: '接收 XEC',
+    receiveHint: '用其他钱包扫描此二维码，向该地址发送 XEC。',
+    changePin: '修改 PIN',
+    currentPin: '当前 PIN',
+    newPin: '新 PIN',
+    pinChanged: 'PIN 已更新。',
+    pinSame: '新 PIN 必须与当前 PIN 不同',
     back: '返回',
   },
 };
