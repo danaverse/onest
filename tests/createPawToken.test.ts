@@ -35,7 +35,7 @@ describe('create-paw-token CLI argument parsing & config resolution', () => {
     expect(cfg.isTest).toBe(false);
     expect(cfg.ticker).toBe('PAW');
     expect(cfg.name).toBe('Onest');
-    expect(cfg.outPath).toContain('deployments/mainnet-paw.json');
+    expect(cfg.outPath.replaceAll('\\', '/')).toContain('deployments/mainnet-paw.json');
   });
 
   it('parses --test flag as test mode with tPAW and test-paw.json', () => {
@@ -46,7 +46,7 @@ describe('create-paw-token CLI argument parsing & config resolution', () => {
     expect(cfg.isTest).toBe(true);
     expect(cfg.ticker).toBe('tPAW');
     expect(cfg.name).toBe('Onest Test');
-    expect(cfg.outPath).toContain('deployments/test-paw.json');
+    expect(cfg.outPath.replaceAll('\\', '/')).toContain('deployments/test-paw.json');
   });
 
   it('parses -t and positional "test" and "tPAW"', () => {
@@ -99,7 +99,7 @@ describe('create-paw-token CLI argument parsing & config resolution', () => {
     const cfg1 = resolveTokenConfig(opts1);
     expect(cfg1.ticker).toBe('MYTEST');
     expect(cfg1.name).toBe('Custom Test');
-    expect(cfg1.outPath).toContain('deployments/custom.json');
+    expect(cfg1.outPath.replaceAll('\\', '/')).toContain('deployments/custom.json');
 
     const opts2 = parseArgs([
       '--ticker',
