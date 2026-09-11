@@ -17,8 +17,12 @@ import {
 } from '../../../src/mint/profileFee.js';
 import { prepareDanaNote } from '../../../src/offering/animalProfileFields.js';
 import { burnOnePaw, explorerTx } from '../../../src/offering/burnPaw.js';
+import { ensureDeskPaw } from './deskInventory.js';
 import { loadDepJson, notifyDanaIndex } from './offer.js';
 import { rememberRootCreator } from './rootCreators.js';
+
+/** 1 atom burned + 6 atoms listing fee retained per paid profile. */
+const MIN_DESK_PAW_PER_PROFILE = 7n;
 
 const FEE_XEC = resolveProfileXecFee(process.env.MINT_PROFILE_XEC_FEE);
 const USED_PATH =
@@ -171,6 +175,11 @@ export async function createPaidProfile(input: {
     if (!sender || sender !== input.address.trim().toLowerCase()) {
       throw new Error('Payment must come from the wallet creating the profile');
     }
+
+    /* No sponsored upvotes yet? Mint a fresh remint (108 atoms) so the burn
+       can proceed. Done before marking the payment used, so a mint failure
+       leaves the payment retryable. */
+    await ensureDeskPaw(MIN_DESK_PAW_PER_PROFILE);
 
     markUsed(paymentTxid);
     try {
