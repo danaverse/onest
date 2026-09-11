@@ -151,10 +151,10 @@ No `voter` field: the sender address comes from the tx inputs (desk on the spons
 
 **Who pays the PAW**
 
-| Path | PAW source | Typical N |
-|------|------------|-----------|
-| User wallet | PAW the user already holds | Any N they sign |
-| Sponsored desk | Desk inventory after remint | **Default 1.** Larger N on the sponsored path drains the desk — require user-held PAW (or user XEC + remint they keep) for N > 1 |
+| Path | PAW source | Typical N | Wait |
+|------|------------|-----------|------|
+| User wallet | PAW the user already holds (+ 6-atom listing fee per burn) | Any N they sign | **None** — user pays XEC fees and the listing fee |
+| Sponsored desk | Desk inventory after remint | **Default 1.** Larger N on the sponsored path drains the desk | Soft wait + future heartbeat |
 
 Sponsored *network fees* and sponsored *token inventory* are different. A casual stamp can still burn 1 PAW from the desk. MVP votes are +1 on the sponsored path (bounded by PoW, the soft wait, and daily caps); when farming becomes indefensible, switch votes to **wallet-only** (weighted) so the voter’s own PAW pays.
 
@@ -164,17 +164,31 @@ Reuse `trendingScore.ts` (HN-style gravity 1.5) so memories and posts share one 
 
 ## Stamp paths and anti-farming
 
-Soft wait ("min pray") is **enforced server-side in `mint-api`** — the WLotus client-side floor alone is too weak. The desk records `waitUntil = challenge.createdAt + MINT_MIN_PRAY_SECONDS` when the remint submits; `/api/burn` rejects early calls (`425 Too Early` + `retryAfterMs`) and never builds the burn before the floor. Config via `MINT_MIN_PRAY_SECONDS` (default **54**, clamp 0–600, `0` disables), set per environment from a GitHub Actions variable into `/etc/onest/mint.env` on deploy. The PWA ports the WLotus countdown (`minPraySeconds.ts`) for UX only — not trusted; PoW time still counts toward the floor because the clock starts at challenge issue. Remint submits immediately on a nonce; cancel abandons the pending burn and the desk keeps the atom (tip race). Pending burns are in-memory today — persist the pending record (with `waitUntil`) so a desk restart mid-wait does not strand the user's remint.
+Soft wait ("min pray") is **enforced server-side in `mint-api`** — the WLotus client-side floor alone is too weak. The desk records `waitUntil = challenge.createdAt + MINT_MIN_PRAY_SECONDS` when the remint submits; `/api/burn` rejects early calls (`425 Too Early` + `retryAfterMs`) and never builds the burn before the floor. Config via `MINT_MIN_PRAY_SECONDS` (default **54**, clamp 0–600, `0` disables), set per environment from a GitHub Actions variable into `/etc/onest/mint.env` on deploy. The PWA ports the WLotus countdown (`minPraySeconds.ts`) for UX only — not trusted; PoW time still counts toward the floor because the clock starts at challenge issue. Remint submits immediately on a nonce; cancel abandons the pending burn and the desk keeps the atom (tip race). Pending burns are in-memory today — persist the pending record (with `waitUntil`) so a desk restart mid-wait does not strand the user's remint. **Scope: desk-sponsored operations only.** When the user pays their own way (XEC network fees and/or the PAW listing fee), the operation is immediate — no wait and no heartbeat.
 
 **Is a 54s / 108s pad enough to stop farming?** No, not by itself. Headless browsers spoof mobile headers. The pad is an attention tax, not a Sybil proof. It is enough only when **there is nothing extractable**: sponsored stamps create a memory record, not liquid value the farmer can sell.
+
+### Wait-time heartbeat PoW (future)
+
+Today the wait is only time (plus the one-time offer PoW), so a farm can idle for 54s and collect a sponsored stamp. Future: **keep the device proving work during the wait**. Scope: the sponsored path only — the only path that has a wait.
+
+- On submit, `mint-api` opens a **heartbeat session** tied to the pending burn and returns the first beat challenge.
+- The wait is divided into **6-second beats**: with the default 54s wait that is **9 beats** (`ceil(wait / MINT_WAIT_TICK_SECONDS)`).
+- Each beat is a small PoW calibrated off the device's observed hashrate (`powAttempts / powMs` from the offer) to **solve in ~2–4s** on a standard WebGPU miner; the remaining ~2–4s of the beat is submission slack. A difficulty floor keeps CPU-only devices able to finish.
+- The client mines beats continuously and POSTs each solved nonce; the desk verifies, marks the beat and issues the next.
+- `/api/burn` requires minimum beat coverage (allow ~1 missed beat for slow devices/networks). No coverage, no burn. Cancel/abandon still skips the burn and the desk keeps the atom.
+- Anti-replay: single-use beat ids, nonce bound to the pending burn, server-side timing.
+- Config: `MINT_WAIT_TICK_SECONDS` (beat length, default 6), `MINT_WAIT_TICK_TARGET_MS` (target solve, default 3000), `MINT_WAIT_TICK_SLACK_BEATS` (default 1), difficulty floor/cap — GitHub Actions variable → `/etc/onest/mint.env`.
+- Honest limit: a farm can mine through the wait too. The point is to raise the **marginal cost per stamp** (compute for the whole wait) and require live presence, not to be a Sybil proof. It composes with Turnstile, daily caps and the XEC-gated user profile below.
+- Never delays remint; heartbeats gate the burn only.
 
 ### Tiered access
 
 | Tier | Who | Identity | Cost | Latency |
 |------|-----|----------|------|---------|
-| **1. Casual mobile PWA** | Installed or mobile browser | `installId` + device PoW | Desk-sponsored fees, rate-limited | Soft wait floor (54s), server-enforced |
-| **2. Fast path** | Same PWA, funded wallet | Address + XEC for fuel | User pays ~network fee | Stamp immediately, no soft wait |
-| **3. Desktop web** | Browser | Wallet (CashTab / local seed) | **User XEC required** | Immediate. Desk does not sponsor |
+| **1. Casual mobile PWA** | Installed or mobile browser | `installId` + device PoW | Desk-sponsored fees, rate-limited | Soft wait floor (54s), server-enforced (+ future heartbeat) |
+| **2. Fast path** | Same PWA, funded **user profile** wallet | Address + XEC for fuel | User pays ~network fee | Stamp immediately, no soft wait |
+| **3. Desktop web** | Browser | User profile wallet (or CashTab) | **User XEC required** | Immediate. Desk does not sponsor |
 
 Why this split:
 
@@ -201,6 +215,32 @@ Defense in depth:
 - A store download kills the share-link loop (Zalo / Facebook / Telegram → open the memory).
 
 Stay PWA. If a store listing is needed later, wrap the same web app (TWA / Capacitor) on Android first. Do not build native solely to detect phones.
+
+---
+
+## User profiles and the wallet (planned)
+
+A **user profile is an eCash wallet** (`ecash-wallet`) holding XEC and PAW. It is the identity, the fee source and the PAW inventory; pet profiles sit underneath it.
+
+**Rules**
+
+- **A pet profile requires a user profile.** No wallet, no animal profile.
+- Pet profile creation **costs the user PAW, not XEC**: a **6-atom listing fee paid to the desk on each user-paid burn** (`PAW_LISTING_FEE_ATOMS`, default 6). The wallet must hold PAW to pay it, so spamming pet profiles costs real token value. XEC is only needed for network fees when the user pays their own way.
+- **User-paid operations are immediate.** No soft wait and no heartbeat for wallet-path burns (profile, tribute, post or vote). The wait exists only where the desk sponsors fees.
+- Memorial tributes, posts and votes keep the sponsored fallback for casual users until user profiles are common; after that the wallet becomes the PAW inventory and weighted votes spend the voter's PAW (see the wallet-only migration in the votes section).
+
+**Seeds**
+
+- Generate a **BIP39 mnemonic client-side** (`crypto.getRandomValues`); keys never leave the device and the server never sees them. No server custody.
+- Encrypt the seed at rest with WebCrypto AES-GCM, key derived with PBKDF2-SHA256 (high iteration count) behind a user passphrase; store ciphertext + salt + IV in IndexedDB, not `localStorage`.
+- **Backup:** reveal words behind passphrase re-entry, copy and download; show a write-it-down warning. **Restore:** enter words (BIP39 checksum) and recover the same address, PAW and XEC.
+- **Binding:** the user signs a message containing `installId`; the server stores `install_id ↔ address` and the address takes precedence for authorship, votes and ownership (see the identity decision). Losing both device and backup loses the wallet — say so plainly in the UI.
+
+**Flow (proposed, first release)**
+
+1. "Create user profile" → generate or restore wallet → show the XEC deposit address.
+2. Pet profile creation requires the wallet, burns 1 PAW for the memorial and pays the **6-atom listing fee** to the desk in the same flow. The desk keeps the existing sponsored remint for the PAW side, so issuance is unchanged; only the wallet requirement and the listing fee are new.
+3. Later, the remint fast path credits the wallet directly and tributes/posts/votes can spend user PAW.
 
 ---
 
@@ -266,7 +306,8 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 | Object store | Cloudflare R2 (zero egress) or S3-compatible; presigned PUT reusing the sha256 key |
 | Image variants | Cloudflare Images later (resize / WebP), not required for beta |
 | Bot check | Turnstile on sponsored challenge |
-| Wallet (fast / desktop) | CashTab / local seed for user-paid fees; wallet-only weighted votes when farming becomes indefensible |
+| User profiles / wallet | In-app `ecash-wallet` (BIP39 + encrypted seed, backup/restore); pet profiles require the wallet + a 6-atom PAW listing fee; wallet-only weighted votes later |
+| Heartbeat PoW | Future: 6s mini-PoW beats during the soft wait (9 beats over the default 54s); burn requires beat coverage |
 | Backups | `sqlite3 .backup` timer for the social DB; R2 lifecycle for orphaned objects |
 
 No Nest, no Prisma, no Redis, no second language. One monorepo, two Node services, one PWA.
@@ -285,6 +326,8 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 8. **Comments** — shipped: hosted (author soft-delete); optional hash stamp later.
 9. **Promote burns to SQLite** — only if `groups()` / search become the bottleneck.
 10. **Postgres** — only after a second writer or a real ops need.
+11. **User profiles** — in-app XEC + PAW wallet (client-side keys), encrypted seed backup/restore; pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk per user-paid burn (anti-spam); user-paid burns are immediate (no wait).
+12. **Wait-time heartbeat PoW** — future anti-farming for the sponsored path only: 6s calibrated mini-PoW beats through the soft wait (9 beats over the default 54s); `/api/burn` requires beat coverage.
 
 ---
 
@@ -294,11 +337,13 @@ No Nest, no Prisma, no Redis, no second language. One monorepo, two Node service
 - **Wire format:** `DANA` versions — v1/v2 memorial, **v3** vote (`direction`, `targetType`, `postHash`; sender read from the tx), **v4** post stamp (`contentHash`).
 - **Stamp discovery:** every stamp (post or vote) rides a **PAW burn tx**; XEC is only the fee. Ingest stays on the PAW token history — no lokad-wide scan.
 - **Social DB owner:** `dana-index` is the single writer (hosted rows + chain-derived rows); `mint-api` stays on PoW/burn and calls it internally.
-- **Soft wait:** **server-enforced in `mint-api`** (deliberately stronger than WLotus's client-only floor). `MINT_MIN_PRAY_SECONDS` default **54s**, clamp 0–600, GitHub Actions variable → `/etc/onest/mint.env`; submit returns `waitUntil`; `/api/burn` rejects early with `425` + `retryAfterMs`. Client ports the WLotus countdown for UX only; never delays remint.
-- **Identity:** progressive. `installId` authors posts/comments on the sponsored path (no wallet needed); `author_address` is captured when a wallet is used and takes precedence. Votes are identified by on-chain sender address; `voter_install` is UX-only and never tallies. Bind `installId ↔ address` when wallets land.
+- **Soft wait:** **server-enforced in `mint-api`** (deliberately stronger than WLotus's client-only floor). `MINT_MIN_PRAY_SECONDS` default **54s**, clamp 0–600, GitHub Actions variable → `/etc/onest/mint.env`; submit returns `waitUntil`; `/api/burn` rejects early with `425` + `retryAfterMs`. Client ports the WLotus countdown for UX only; never delays remint. **Applies to desk-sponsored operations only** — user-paid wallet burns are immediate (they already pay XEC fees plus the PAW listing fee).
+- **Identity:** progressive. `installId` authors posts/comments on the sponsored path (no wallet needed); `author_address` is captured when a wallet is used and takes precedence. Votes are identified by on-chain sender address; `voter_install` is UX-only and never tallies. When user profiles land the wallet address becomes the primary identity; bind `installId ↔ address` with a signed message.
 - **Video:** out of MVP; images-only at launch, short clips with poster frame later.
 - **Vote UX:** MVP is a single **+1** PAW vote; amount presets and an optional per-tx cap (suggested 108) come after launch. Stacked burns stand: **sum atoms, no one-vote-per-identity lock.**
 - **Sponsored vote path:** MVP +1 sponsored allowed (PoW + soft wait + daily caps as the farming bound); N > 1 stays **no**. Migrate to **wallet-only** weighted votes when farming becomes indefensible.
 - **Comments:** phase 2 (hosted), same identity rules as posts.
+- **User profiles (planned):** a user profile is an in-app eCash wallet (XEC + PAW), client-side BIP39 seed encrypted behind a passphrase with backup/restore. **Pet profile creation requires the wallet and pays a 6-atom PAW listing fee to the desk on every user-paid burn** (`PAW_LISTING_FEE_ATOMS`, default 6) — **no XEC toll**. User-paid burns are **immediate** (no wait). Tributes/posts/votes keep the sponsored fallback until user profiles are common, then weighted votes spend the voter's PAW.
+- **Wait-time heartbeat PoW (future):** the soft wait is split into **6s beats** (9 beats for the default 54s wait); each beat solves in ~2–4s on a standard WebGPU miner and the rest of the beat is slack. `/api/burn` requires beat coverage (allow ~1 miss). Raises marginal farming cost and requires presence; never delays remint. **Sponsored path only.**
 
 Change a decision here rather than scattering notes in PR descriptions.
