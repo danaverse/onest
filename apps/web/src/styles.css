@@ -1285,7 +1285,7 @@ body {
 .footprint-avatar {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
