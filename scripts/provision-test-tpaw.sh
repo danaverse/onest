@@ -216,6 +216,7 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 
 if [[ -f "$NGINX_SRC" ]]; then
   echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
+  install -m 644 "$ROOT/deploy/contabo/nginx-onest-hardening.conf" /etc/nginx/snippets/onest-hardening.conf
   install -m 644 "$NGINX_SRC" "$NGINX_DEST"
   nginx -t
   systemctl reload nginx
