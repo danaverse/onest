@@ -16,6 +16,28 @@ export const DEFAULT_PROFILE_XEC_FEE = 20n;
 export const PROFILE_FEE_MIN_XEC = 1n;
 export const PROFILE_FEE_MAX_XEC = 10_000n;
 
+/**
+ * Flat XEC fee for desk-built votes (and other no-listing actions).
+ *
+ * A vote burns exactly 1 PAW and keeps nothing, so there is no listing fee.
+ * Default: 6 XEC = 600 sats ≈ 1–2 XEC network fees + ≈ 4–5 XEC for the atom.
+ * (Compare the 20 XEC profile fee, which includes 7 atoms: 1 burn + 6 listing.)
+ */
+export const DEFAULT_VOTE_XEC_FEE = 6n;
+
+export function resolveVoteXecFee(
+  raw: string | number | bigint | null | undefined,
+): bigint {
+  if (raw == null || String(raw).trim() === '') return DEFAULT_VOTE_XEC_FEE;
+  try {
+    const n = BigInt(String(raw).trim());
+    if (n < PROFILE_FEE_MIN_XEC) return DEFAULT_VOTE_XEC_FEE;
+    return n > PROFILE_FEE_MAX_XEC ? PROFILE_FEE_MAX_XEC : n;
+  } catch {
+    return DEFAULT_VOTE_XEC_FEE;
+  }
+}
+
 export function resolveProfileXecFee(
   raw: string | number | bigint | null | undefined,
 ): bigint {

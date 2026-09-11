@@ -7,6 +7,8 @@
  *   POST /api/burn       { installId, remintTxid, burnToken }
  *   POST /api/cancel     { installId, challengeId?, remintTxid?, burnToken? }
  *   GET  /api/status?installId=
+ *   GET  /api/vote/fee
+ *   POST /api/vote/create { installId, address, paymentTxid, postHash, direction, targetType? }
  *   GET  /api/root-creator?txid=&installId=
  *   POST /api/push/subscribe
  *   POST /api/push/unsubscribe
@@ -30,6 +32,7 @@ import {
 import { checkRootCreator, listRootCreators } from './rootCreators.js';
 import { createPaidProfile, profileFeeInfo } from './paidProfile.js';
 import { createPaidPost, postFeeInfo } from './paidPost.js';
+import { createPaidVote, voteFeeInfo } from './paidVote.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -134,6 +137,27 @@ const server = createServer(async (req, res) => {
         address: String(body.address || ''),
         paymentTxid: String(body.paymentTxid || ''),
         contentHash: String(body.contentHash || ''),
+      });
+      json(res, 200, result);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/vote/fee') {
+      json(res, 200, await voteFeeInfo());
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/vote/create') {
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      const result = await createPaidVote({
+        installId,
+        address: String(body.address || ''),
+        paymentTxid: String(body.paymentTxid || ''),
+        postHash: String(body.postHash || ''),
+        direction: body.direction,
+        targetType:
+          typeof body.targetType === 'number' ? body.targetType : undefined,
       });
       json(res, 200, result);
       return;
