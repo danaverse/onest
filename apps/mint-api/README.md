@@ -18,11 +18,10 @@ Device PoW challenge/submit desk with fee-sponsored remint and DANA animal memor
 - `GET /api/root-creator` — Check animal profile root creator status `{ txid, installId }`
 - `POST /api/cancel` — Cancel active challenge or pending burn
 - `GET /api/listing-fee` — Quote for wallet-paid burns `{ tokenId, atoms (default 6), feeAddress }`; the user's wallet burns 1 PAW, sends the fee and pays XEC, then broadcasts directly (no wait)
-- `GET /api/exchange/rate` — PAW exchange rate `{ satsPerPawAtom, xecPerPawAtom, maxPawAtoms }` (default 1 XEC = 1 PAW atom)
-- `POST /api/exchange/order` — Create a buy order `{ installId, address, pawAtoms }` → `{ orderId, depositAddress, xecSats, xec, memo, expiresAt }` (30-minute TTL)
-- `GET /api/exchange/order/:id` — Order status (`open` / `paid` / `fulfilled` / `failed` / `expired`)
+- `GET /api/profile/fee` — Flat XEC fee for a desk-built profile `{ xec, xecSats, address }` (`MINT_PROFILE_XEC_FEE`, default 20 XEC = 2,000 sats)
+- `POST /api/profile/create` — `{ installId, address, paymentTxid, note, parentBurnTxid? }`: verifies the on-chain payment (paid to the desk from the creator's address, not reused) and burns 1 PAW from desk inventory to anchor the profile. No remint, no PoW, no wait.
 
-**PAW exchange**: the buyer pays the quoted XEC to the deposit address with the `ONEX<orderId>` OP_RETURN memo; the watcher matches the payment, tops up inventory with a fresh sponsored remint if needed, and delivers PAW from the desk wallet. Sponsored votes keep minting fresh (108 per remint), which replenishes the inventory. The earlier client-side self-mint (PR #21) was removed in favor of the desk exchange.
+**Paid profiles (no PAW)**: the user pays a flat XEC fee (default 20 XEC) and the desk burns 1 PAW from inventory. Margin per profile: 2,000 sats income − ~300–600 sats burn-tx fee − 1 PAW atom (inventory) ≈ **75%+**. Sponsored votes keep minting fresh (108 per remint), which maintains inventory.
 - `POST /api/notify { burnTxid, installId? }` — Forward a wallet-broadcast tx to dana-index for immediate ingest
 - `GET /health` — Health check endpoint
 

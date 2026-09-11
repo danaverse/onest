@@ -28,13 +28,7 @@ import {
   WaitNotElapsedError,
 } from './offer.js';
 import { checkRootCreator } from './rootCreators.js';
-import {
-  createExchangeOrder,
-  exchangeRateInfo,
-  exchangeStore,
-  publicExchangeOrder,
-  startExchangeWatcher,
-} from './deskExchange.js';
+import { createPaidProfile, profileFeeInfo } from './paidProfile.js';
 import {
   deletePushSubscription,
   savePushSubscription,
@@ -121,42 +115,23 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/exchange/rate') {
-      json(res, 200, exchangeRateInfo());
+    if (req.method === 'GET' && url.pathname === '/api/profile/fee') {
+      json(res, 200, await profileFeeInfo());
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/exchange/order') {
+    if (req.method === 'POST' && url.pathname === '/api/profile/create') {
       const body = await readJsonBody(req);
       const installId = requireInstallId(body.installId);
-      let pawAtoms: bigint;
-      try {
-        pawAtoms = BigInt(String(body.pawAtoms ?? '').trim());
-      } catch {
-        json(res, 400, { error: 'pawAtoms must be a positive integer' });
-        return;
-      }
-      const quote = await createExchangeOrder({
+      const result = await createPaidProfile({
         installId,
         address: String(body.address || ''),
-        pawAtoms,
+        paymentTxid: String(body.paymentTxid || ''),
+        note: typeof body.note === 'string' ? body.note : '',
+        parentBurnTxid:
+          typeof body.parentBurnTxid === 'string' ? body.parentBurnTxid : undefined,
       });
-      json(res, 200, quote);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname.startsWith('/api/exchange/order/')) {
-      const id = decodeURIComponent(
-        url.pathname.slice('/api/exchange/order/'.length),
-      )
-        .trim()
-        .toLowerCase();
-      const order = exchangeStore.get(id);
-      if (!order) {
-        json(res, 404, { error: 'order not found' });
-        return;
-      }
-      json(res, 200, { ok: true, order: publicExchangeOrder(order) });
+      json(res, 200, result);
       return;
     }
 
@@ -305,10 +280,4 @@ try {
 server.listen(PORT, () => {
   console.log(`Onest mint-api listening on :${PORT} startedAt=${STARTED_AT}`);
   startMorningReminderLoop();
-  if (
-    process.env.TOKEN_ID?.trim() ||
-    process.env.VITE_PRAYER_TOKEN_ID?.trim()
-  ) {
-    startExchangeWatcher();
-  }
 });
