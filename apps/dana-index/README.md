@@ -14,6 +14,7 @@ Memories:
 - `GET /health` — Service health check (includes post count + ingest cursor)
 - `GET /api/recent?limit=40` — Recent paw tributes and profiles
 - `GET /api/trending?limit=8` — Trending profiles ranked by tribute activity & gravity decay
+- `GET /api/profiles/recent?limit=12` — Newest pet profiles by creation time (root burn), not latest activity
 - `GET /api/search?q=&limit=20` — Search profiles by pet name
 - `GET /api/memorial/:txid` — Memorial details and aggregated paw-print tributes
 - `GET /og/:txid` — Open Graph preview HTML for messaging app embeds

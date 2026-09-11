@@ -6,6 +6,7 @@
  *   GET  /health
  *   GET  /api/recent?limit=40
  *   GET  /api/trending?limit=8
+ *   GET  /api/profiles/recent?limit=12
  *   GET  /api/search?q=&limit=20
  *   GET  /api/memorial/:txid
  *   GET  /og/:txid
@@ -274,6 +275,12 @@ const server = createServer(async (req, res) => {
         gravity: TRENDING_GRAVITY,
         trending: store.trending(limit),
       });
+      return;
+    }
+
+    if (req.method === 'GET' && normPath === '/api/profiles/recent') {
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 12)));
+      json(res, 200, { ok: true, profiles: store.recentProfiles(limit) });
       return;
     }
 

@@ -10,9 +10,11 @@ import { PostCard } from './components/PostCard.js';
 import { PostDetailModal } from './components/PostDetailModal.js';
 import { PetPage } from './components/PetPage.js';
 import { MyPets } from './components/MyPets.js';
+import { RecentFootprints } from './components/RecentFootprints.js';
 import { TabBar, type AppTab } from './components/TabBar.js';
 import {
   fetchRecentBurns,
+  fetchRecentProfiles,
   fetchTrendingProfiles,
   searchProfiles,
   type IndexBurn,
@@ -35,6 +37,7 @@ export default function App() {
   });
   const [tab, setTab] = useState<AppTab>('home');
   const [recent, setRecent] = useState<IndexBurn[]>([]);
+  const [recentProfiles, setRecentProfiles] = useState<IndexMemorialGroup[]>([]);
   const [trending, setTrending] = useState<IndexMemorialGroup[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<IndexMemorialGroup[] | null>(null);
@@ -86,12 +89,14 @@ export default function App() {
   async function loadFeed() {
     try {
       setLoading(true);
-      const [r, tr] = await Promise.all([
+      const [r, tr, rp] = await Promise.all([
         fetchRecentBurns(20).catch(() => []),
         fetchTrendingProfiles(12).catch(() => []),
+        fetchRecentProfiles(12).catch(() => []),
       ]);
       setRecent(r);
       setTrending(tr);
+      setRecentProfiles(rp);
     } finally {
       setLoading(false);
     }
@@ -248,6 +253,11 @@ export default function App() {
               </section>
             ) : (
               <>
+                <RecentFootprints
+                  profiles={recentProfiles}
+                  onOpenPet={openPet}
+                />
+
                 <section className="timeline-section">
                   <div className="feed-head">
                     <h2>{t('moments')}</h2>
@@ -290,35 +300,6 @@ export default function App() {
                     </div>
                   )}
                 </section>
-
-                {recent.length > 0 && (
-                  <section className="recent-section">
-                    <h2>{t('recentTributes')}</h2>
-                    <ul className="tribute-list">
-                      {recent.map(b => (
-                        <li key={b.burnTxid} className="tribute-item">
-                          <span className="paw-bullet">🐾</span>
-                          <div className="tribute-details">
-                            <span
-                              className="tribute-note clickable-text"
-                              onClick={() => openPet(b.originalBurnTxid || b.burnTxid)}
-                            >
-                              {profileBareNameFromNote(b.note) || 'A loving paw print tribute'}
-                            </span>
-                            <a
-                              href={`https://danaverse.org/offering/${b.burnTxid}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="tx-link"
-                            >
-                              {b.burnTxid.slice(0, 8)}...
-                            </a>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
 
                 {loading && (
                   <div className="feed-loading">
