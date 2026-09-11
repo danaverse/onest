@@ -35,7 +35,12 @@ import {
   POW_PAW_BASE_ZERO_BITS,
   WLOTUS_GENESIS_UNIX,
 } from '../../../src/params/pawMint.js';
+import { resolveRemintLocktime } from '../../../src/mint/remintLocktime.js';
 import { loadDepJson } from './offer.js';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 interface TokenUtxoLike {
   outpoint: { txid: string; outIdx: number };
@@ -89,9 +94,6 @@ export async function mintDeskPaw(): Promise<{ txid: string }> {
     },
   );
 
-  const mtp = await getMedianTimePast(chronik);
-  const locktime = Math.max(baton.creatingLockTime, mtp.mtp);
-
   let fuelUtxo = pickSizedFuelUtxo(tipWallet.wallet.utxos);
   if (!fuelUtxo) {
     const mintDesk = await loadMintWallet(chronik);
@@ -101,40 +103,54 @@ export async function mintDeskPaw(): Promise<{ txid: string }> {
   }
   if (!fuelUtxo) throw new Error('Could not prepare remint fuel');
 
-  const prepared = await buildMooreTipRemintChallenge({
-    contract,
-    baton: {
-      outpoint: { txid: baton.txid, outIdx: baton.outIdx },
-      sats: baton.sats,
-      txid: baton.txid,
-      vout: baton.outIdx,
-    },
-    fuel: {
-      outpoint: { txid: fuelUtxo.outpoint.txid, outIdx: fuelUtxo.outpoint.outIdx },
-      sats: fuelUtxo.sats,
-      outputScript: tipWallet.wallet.script,
-    },
-    miner: { sk: tipWallet.sk, pk: tipWallet.pk },
-    locktime,
-    opReturn: expectedWLotusCovenantMintOpReturnScript(
-      dep.tokenId,
-      PAW_MINT_ATOMS,
-    ),
-  });
+  /* Retry with a fresh locktime if the mempool rejects the tx as non-final
+     (e.g. MTP moved between the read and the broadcast). */
+  for (let attempt = 1; ; attempt++) {
+    const mtp = await getMedianTimePast(chronik);
+    const locktime = resolveRemintLocktime(baton.creatingLockTime, mtp.mtp);
 
-  const mined = minePowBits({
-    preimage: prepared.preimage,
-    bits: prepared.tip.bits,
-    commit: MOORE_TIP_POW_COMMIT,
-    maxAttempts: 100_000_000,
-  });
-  const built = await buildMooreTipRemintTxWithNonce({
-    prepared,
-    nonce: mined.nonce,
-  });
-  const broadcast = await chronik.broadcastTx(built.txHex);
-  const txid = typeof broadcast === 'string' ? broadcast : broadcast.txid;
-  return { txid };
+    const prepared = await buildMooreTipRemintChallenge({
+      contract,
+      baton: {
+        outpoint: { txid: baton.txid, outIdx: baton.outIdx },
+        sats: baton.sats,
+        txid: baton.txid,
+        vout: baton.outIdx,
+      },
+      fuel: {
+        outpoint: { txid: fuelUtxo.outpoint.txid, outIdx: fuelUtxo.outpoint.outIdx },
+        sats: fuelUtxo.sats,
+        outputScript: tipWallet.wallet.script,
+      },
+      miner: { sk: tipWallet.sk, pk: tipWallet.pk },
+      locktime,
+      opReturn: expectedWLotusCovenantMintOpReturnScript(
+        dep.tokenId,
+        PAW_MINT_ATOMS,
+      ),
+    });
+
+    const mined = minePowBits({
+      preimage: prepared.preimage,
+      bits: prepared.tip.bits,
+      commit: MOORE_TIP_POW_COMMIT,
+      maxAttempts: 100_000_000,
+    });
+    const built = await buildMooreTipRemintTxWithNonce({
+      prepared,
+      nonce: mined.nonce,
+    });
+    try {
+      const broadcast = await chronik.broadcastTx(built.txHex);
+      const txid = typeof broadcast === 'string' ? broadcast : broadcast.txid;
+      return { txid };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/nonfinal|non-final/i.test(msg) || attempt >= 3) throw e;
+      console.warn(`desk mint non-final, retrying with fresh locktime (${attempt}/3)`);
+      await sleep(20_000);
+    }
+  }
 }
 
 /** Mint a fresh remint when the tip wallet holds fewer than `minAtoms`. */
