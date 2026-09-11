@@ -25,6 +25,17 @@ export const DANA_VERSION_CREATOR = 5;
 export const DANA_CREATOR_HASH_LEN = 20;
 export const DANA_PARENT_TXID_LEN = 32;
 
+/** Every DANA version that is a memorial (v5 adds the creator hash160). */
+export const MEMORIAL_VERSIONS: readonly number[] = [
+  DANA_VERSION,
+  DANA_VERSION_PARENT,
+  DANA_VERSION_CREATOR,
+];
+
+export function isMemorialVersion(version: number): boolean {
+  return MEMORIAL_VERSIONS.includes(version);
+}
+
 export const OFFERING_ID_PAW = 'paw' as const;
 export const OFFERING_ID_ONEST = 'onest' as const;
 export const OFFERING_ID = OFFERING_ID_PAW;
