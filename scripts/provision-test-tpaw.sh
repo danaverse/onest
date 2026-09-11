@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Provision the test Onest desk on tPAW (not WLotus).
 #
-# Requires TEST_DESK_SEEDS (or MINT_MNEMONIC) in the environment.
+# First-time genesis needs TEST_DESK_SEEDS (or MINT_MNEMONIC).
+# Later deploys can omit the seed: tPAW metadata in deployments/test-paw.json
+# and the mnemonic already in /etc/onest/mint.env are reused.
 # Safe to re-run: reuses deployments/test-paw.json when present.
 set -euo pipefail
 
@@ -19,9 +21,16 @@ SOFT_WAIT="${MINT_MIN_PRAY_SECONDS:-54}"
 NGINX_SRC="$ROOT/deploy/contabo/nginx-onest-test.conf"
 NGINX_DEST="${NGINX_DEST:-/etc/nginx/sites-enabled/onest-test}"
 
+REFRESH_ONLY=0
 if [[ -z "${TEST_DESK_SEEDS:-}" && -z "${MINT_MNEMONIC:-}" && -z "${GENESIS_MNEMONIC:-}" ]]; then
-  echo "provision-test-tpaw: TEST_DESK_SEEDS (or MINT_MNEMONIC) is required" >&2
-  exit 1
+  if [[ -f "$ROOT/deployments/test-paw.json" && -f "$MINT_ENV" ]] \
+    && grep -q '^MINT_MNEMONIC=' "$MINT_ENV"; then
+    REFRESH_ONLY=1
+    echo "provision-test-tpaw: no seed in env; refreshing existing tPAW desk"
+  else
+    echo "provision-test-tpaw: TEST_DESK_SEEDS (or MINT_MNEMONIC) is required for first-time genesis" >&2
+    exit 1
+  fi
 fi
 
 export PATH="$ROOT/node_modules/.bin:/usr/local/bin:/usr/bin:${PATH:-}"
@@ -37,14 +46,17 @@ if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
 fi
 chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
 
-echo "provision-test-tpaw: inspecting desk address (no broadcast)..."
-ADDRESS_OUT="$(npx tsx scripts/create-paw-token.ts --test --address)"
-echo "$ADDRESS_OUT" | grep -E 'Genesis Address:|Current Balance:|Ticker:|Mode:' || true
-
 mkdir -p "$(dirname "$MINT_ENV")" "$(dirname "$DANA_ENV")" "$ROOT/deployments" "$ROOT/data"
 
-echo "provision-test-tpaw: creating tPAW genesis if needed..."
-npx tsx scripts/create-paw-token.ts --test
+if [[ "$REFRESH_ONLY" -eq 0 ]]; then
+  echo "provision-test-tpaw: inspecting desk address (no broadcast)..."
+  ADDRESS_OUT="$(npx tsx scripts/create-paw-token.ts --test --address)"
+  echo "$ADDRESS_OUT" | grep -E 'Genesis Address:|Current Balance:|Ticker:|Mode:' || true
+  echo "provision-test-tpaw: creating tPAW genesis if needed..."
+  npx tsx scripts/create-paw-token.ts --test
+else
+  echo "provision-test-tpaw: skipping genesis (using existing deployments/test-paw.json)"
+fi
 
 DEP_JSON="$ROOT/deployments/test-paw.json"
 if [[ ! -f "$DEP_JSON" ]]; then
@@ -64,8 +76,33 @@ export SEED_SRC TOKEN_ID REPO_DEST SOFT_WAIT CHRONIK_URLS SITE_ORIGIN MINT_ENV D
 export MINT_PORT DANA_PORT
 umask 077
 node --input-type=module -e '
-import { writeFileSync } from "node:fs";
-const seed = process.env.SEED_SRC || "";
+import { readFileSync, writeFileSync } from "node:fs";
+function readEnvValue(path, key) {
+  try {
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (!line.startsWith(key + "=")) continue;
+      let v = line.slice(key.length + 1).trim();
+      if (
+        (v.startsWith("\"") && v.endsWith("\"")) ||
+        (v.startsWith("'\''") && v.endsWith("'\''"))
+      ) {
+        v = v.slice(1, -1);
+      }
+      return v;
+    }
+  } catch {
+    /* missing file */
+  }
+  return "";
+}
+const seed =
+  process.env.SEED_SRC ||
+  readEnvValue(process.env.MINT_ENV, "MINT_MNEMONIC") ||
+  readEnvValue(process.env.MINT_ENV, "GENESIS_MNEMONIC");
+if (!seed) {
+  console.error("provision-test-tpaw: no desk mnemonic in env or mint.env");
+  process.exit(1);
+}
 const tokenId = process.env.TOKEN_ID || "";
 const mintPort = process.env.MINT_PORT || "9787";
 const danaPort = process.env.DANA_PORT || "9788";
