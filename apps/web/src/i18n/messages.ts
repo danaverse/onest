@@ -48,6 +48,7 @@ export type MessageKey =
   | 'voteFeeHint'
   | 'voteNeedPaw'
   | 'voteNeedXec'
+  | 'voteLockedHint'
   | 'voteCounting'
   | 'votingStart'
   | 'votingRefreshing'
@@ -167,6 +168,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteNeedPaw: 'You need at least 1 PAW to vote from your wallet.',
     voteNeedXec:
       'You need a little more XEC to vote. Send XEC to your wallet, then try again.',
+    voteLockedHint: 'Unlock your account to vote with PAW or XEC.',
     voteCounting: 'Counting your vote...',
     votingStart: 'Preparing your vote...',
     votingRefreshing: 'Updating score...',
@@ -290,6 +292,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteNeedPaw: 'Bạn cần ít nhất 1 PAW để bình chọn từ ví.',
     voteNeedXec:
       'Bạn cần thêm một ít XEC để bình chọn. Hãy gửi XEC vào ví rồi thử lại.',
+    voteLockedHint: 'Mở khóa tài khoản để bình chọn bằng PAW hoặc XEC.',
     voteCounting: 'Đang ghi nhận bình chọn...',
     votingStart: 'Đang chuẩn bị bình chọn...',
     votingRefreshing: 'Đang cập nhật điểm...',
@@ -409,6 +412,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     voteFeeHint: '支付 {xec} XEC——销毁 1 PAW。无上架费，无需等待挖矿。',
     voteNeedPaw: '从钱包投票至少需要 1 PAW。',
     voteNeedXec: 'XEC 不足，请先向钱包充值再投票。',
+    voteLockedHint: '解锁账户后可用 PAW 或 XEC 投票。',
     voteCounting: '正在计入投票...',
     votingStart: '正在准备投票...',
     votingRefreshing: '正在更新分数...',
