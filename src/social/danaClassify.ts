@@ -34,7 +34,11 @@ export function classifyDanaPush(push: Uint8Array): DanaPush | null {
   if (push.length === 15 && push[4] === 4) return null;
 
   const version = push[4]!;
-  if (version === 1 || version === 2) {
+  if (
+    version === 1 ||
+    version === 2 ||
+    version === 5 // memorial with on-chain creator hash160
+  ) {
     try {
       return { kind: 'memorial', memorial: parseMemorialPushdata(push) };
     } catch {

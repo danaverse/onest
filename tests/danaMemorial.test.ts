@@ -1,8 +1,10 @@
 import {
   memorialPushdata,
+  memorialPushdataWithCreator,
   parseMemorialPushdata,
   OFFERING_ID_PAW,
   DANA_VERSION,
+  DANA_VERSION_CREATOR,
   DANA_VERSION_PARENT,
 } from '../src/offering/danaMemorial.js';
 
@@ -30,5 +32,26 @@ describe('danaMemorial', () => {
     expect(parsed.offeringId).toBe(OFFERING_ID_PAW);
     expect(parsed.note).toBe(note);
     expect(parsed.parentBurnTxid).toBe(parentTxid);
+  });
+
+  it('carries the creator hash160 on-chain (v5, rebuild-safe ownership)', () => {
+    const creatorHash = 'ab'.repeat(20);
+    const note = 'species\u001fLuna\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001fmemorial\u001fsolar';
+    const data = memorialPushdataWithCreator(note, creatorHash.toUpperCase());
+
+    const parsed = parseMemorialPushdata(data);
+    expect(parsed.version).toBe(DANA_VERSION_CREATOR);
+    expect(parsed.note).toBe(note);
+    expect(parsed.creatorHash160).toBe(creatorHash);
+    expect(parsed.parentBurnTxid).toBeUndefined();
+
+    const withParent = memorialPushdataWithCreator(note, creatorHash, OFFERING_ID_PAW, 'b'.repeat(64));
+    const parsedParent = parseMemorialPushdata(withParent);
+    expect(parsedParent.creatorHash160).toBe(creatorHash);
+    expect(parsedParent.parentBurnTxid).toBe('b'.repeat(64));
+  });
+
+  it('rejects malformed v5 creator hashes', () => {
+    expect(() => memorialPushdataWithCreator('note', 'short')).toThrow(/hash160/i);
   });
 });

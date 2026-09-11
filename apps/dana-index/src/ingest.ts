@@ -8,7 +8,7 @@
  * All routes are idempotent (BurnStore.has, unique vote txid, pending-only verify),
  * so re-processing is safe.
  */
-import { Address } from 'ecash-lib';
+import { Address, fromHex } from 'ecash-lib';
 import { ChronikClient, type Tx } from 'chronik-client';
 import { danaPushFromOutputScriptHex } from '../../../src/social/danaFromScript.js';
 import type { DanaPush } from '../../../src/social/danaClassify.js';
@@ -94,6 +94,18 @@ function mergeTotals(dst: IngestTotals, src: IngestTotals): void {
   dst.vote += src.vote;
 }
 
+/** v5 memorials carry the creator's P2PKH hash160 on-chain. */
+export function creatorAddressFromPush(push: DanaPush): string | null {
+  if (push.kind !== 'memorial') return null;
+  const hash = push.memorial.creatorHash160;
+  if (!hash || !/^[0-9a-f]{40}$/.test(hash)) return null;
+  try {
+    return Address.p2pkh(fromHex(hash)).toString().toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export function routeTx(
   tx: Tx,
   tokenId: string,
@@ -117,7 +129,8 @@ export function routeTx(
     burnedBy: senderAddressFromTx(tx),
     voterInstall: opts?.voterInstall ?? null,
     creatorInstallId: opts?.creatorInstallId ?? null,
-    creatorAddress: opts?.creatorAddress ?? null,
+    /* On-chain v5 creator wins; notify fallback covers legacy v1/v2. */
+    creatorAddress: creatorAddressFromPush(push) ?? opts?.creatorAddress ?? null,
   });
   addRoute(totals, r);
   return totals;

@@ -49,10 +49,12 @@ export async function createPetProfileWithWallet(opts: {
   const note = encodeAnimalProfileNote(opts.fields);
   // Lazy: keeps ecash-lib/wasm out of the main bundle.
   const { burnOnePaw } = await import('../../../../src/offering/burnPaw.js');
+  const { shaRmd160, toHex } = await import('ecash-lib');
   const result = await burnOnePaw({
     wallet: opts.wallet,
     tokenId,
     note,
+    creatorHash160: toHex(shaRmd160(opts.wallet.pk)),
     burnAtoms: 1n,
     feeAtoms: fee.atoms,
     feeAddress: fee.feeAddress,

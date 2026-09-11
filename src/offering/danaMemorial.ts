@@ -16,6 +16,13 @@ export const DANA_LOKAD = new TextEncoder().encode('DANA');
 
 export const DANA_VERSION = 1;
 export const DANA_VERSION_PARENT = 2;
+/**
+ * v5 = v1/v2 memorial carrying the creator's P2PKH hash160 on-chain, so pet
+ * ownership survives an index rebuild without any private mapping.
+ * Wire: DANA | 5 | idLen | id | noteLen | note | hash160(20) | parentLen | parent
+ */
+export const DANA_VERSION_CREATOR = 5;
+export const DANA_CREATOR_HASH_LEN = 20;
 export const DANA_PARENT_TXID_LEN = 32;
 
 export const OFFERING_ID_PAW = 'paw' as const;
@@ -65,6 +72,8 @@ export interface MemorialFields {
   offeringId: string;
   note: string;
   parentBurnTxid?: string;
+  /** v5 only: P2PKH hash160 (hex) of the creator's wallet. */
+  creatorHash160?: string;
   lokad: 'DANA';
 }
 
@@ -108,6 +117,63 @@ export function memorialPushdata(
   return out;
 }
 
+/** v5 memorial: note + creator hash160 (on-chain ownership), optional parent. */
+export function memorialPushdataWithCreator(
+  note: string,
+  creatorHash160Hex: string,
+  offeringId: string = OFFERING_ID_PAW,
+  parentBurnTxid?: string,
+): Uint8Array {
+  const enc = new TextEncoder();
+  const idBytes = enc.encode(offeringId);
+  if (idBytes.length > 32) {
+    throw new Error(`offeringId exceeds 32 bytes: ${offeringId}`);
+  }
+  const creatorHash = creatorHash160Hex.trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(creatorHash)) {
+    throw new Error('creatorHash160Hex must be 20 bytes hex');
+  }
+
+  const parent = parseParentBurnTxidHex(parentBurnTxid);
+  const cleanNote = truncateUtf8Bytes(note.trim(), memorialNoteMaxBytes(Boolean(parent)));
+  const noteBytes = enc.encode(cleanNote);
+
+  const parentExtra = parent ? 1 + DANA_PARENT_TXID_LEN : 1;
+  const total =
+    4 +
+    1 +
+    1 +
+    idBytes.length +
+    1 +
+    noteBytes.length +
+    DANA_CREATOR_HASH_LEN +
+    parentExtra;
+  if (total > 223) {
+    throw new Error(`DANA v5 payload too large: ${total} bytes`);
+  }
+
+  const out = new Uint8Array(total);
+  let o = 0;
+  out.set(DANA_LOKAD, o);
+  o += 4;
+  out[o++] = DANA_VERSION_CREATOR;
+  out[o++] = idBytes.length;
+  out.set(idBytes, o);
+  o += idBytes.length;
+  out[o++] = noteBytes.length;
+  out.set(noteBytes, o);
+  o += noteBytes.length;
+  out.set(hexToBytes(creatorHash), o);
+  o += DANA_CREATOR_HASH_LEN;
+  if (parent) {
+    out[o++] = DANA_PARENT_TXID_LEN;
+    out.set(hexToBytes(parent), o);
+  } else {
+    out[o++] = 0;
+  }
+  return out;
+}
+
 export function parseMemorialPushdata(data: Uint8Array): MemorialFields {
   if (!lokadEquals(data, DANA_LOKAD)) {
     throw new Error('Pushdata does not start with DANA');
@@ -117,7 +183,11 @@ export function parseMemorialPushdata(data: Uint8Array): MemorialFields {
     throw new Error('Truncated DANA header');
   }
   const version = data[o++]!;
-  if (version !== DANA_VERSION && version !== DANA_VERSION_PARENT) {
+  if (
+    version !== DANA_VERSION &&
+    version !== DANA_VERSION_PARENT &&
+    version !== DANA_VERSION_CREATOR
+  ) {
     throw new Error(`Unsupported DANA version: ${version}`);
   }
   const idLen = data[o++]!;
@@ -137,8 +207,19 @@ export function parseMemorialPushdata(data: Uint8Array): MemorialFields {
   o += noteLen;
   const note = dec.decode(noteBytes);
 
+  let creatorHash160: string | undefined;
+  if (version === DANA_VERSION_CREATOR) {
+    if (data.length < o + DANA_CREATOR_HASH_LEN) {
+      throw new Error('Truncated creator hash160');
+    }
+    creatorHash160 = bytesToHex(
+      data.slice(o, o + DANA_CREATOR_HASH_LEN),
+    ).toLowerCase();
+    o += DANA_CREATOR_HASH_LEN;
+  }
+
   let parentBurnTxid: string | undefined;
-  if (version === DANA_VERSION_PARENT) {
+  if (version === DANA_VERSION_PARENT || version === DANA_VERSION_CREATOR) {
     if (data.length < o + 1) {
       throw new Error('Truncated parentBurnTxid length');
     }
@@ -163,6 +244,7 @@ export function parseMemorialPushdata(data: Uint8Array): MemorialFields {
     offeringId,
     note,
     parentBurnTxid,
+    creatorHash160,
     lokad: 'DANA',
   };
 }
