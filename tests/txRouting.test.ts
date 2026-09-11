@@ -112,6 +112,26 @@ describe('tx routing', () => {
     expect(burns.recent(10)).toHaveLength(1);
   });
 
+  it('backfills creator attribution on an already-indexed memorial', () => {
+    const tx = fakeTx({ txid: '12'.repeat(32), token: true, blockHeight: 11, blockTs: 1001 });
+    const push = pushOf(memorialPushdata('Luna', OFFERING_ID_PAW));
+    expect(routeDanaTx({ tx, tokenId: TOKEN, push, burnStore: burns }).memorial).toBe(true);
+    expect(burns.get(tx.txid)?.creatorAddress).toBeUndefined();
+
+    const again = routeDanaTx({
+      tx,
+      tokenId: TOKEN,
+      push,
+      burnStore: burns,
+      creatorInstallId: 'install-luna',
+      creatorAddress: 'ECASH:QQCreator',
+    });
+    expect(again.memorial).toBe(true);
+    const stored = burns.get(tx.txid);
+    expect(stored?.creatorInstallId).toBe('install-luna');
+    expect(stored?.creatorAddress).toBe('ecash:qqcreator');
+  });
+
   it('ignores txs that do not touch the PAW token', () => {
     const tx = fakeTx({ txid: '22'.repeat(32), token: false });
     const push = pushOf(memorialPushdata('Bella', OFFERING_ID_PAW));

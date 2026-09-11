@@ -2,6 +2,7 @@
  * Flat-fee paid pet profiles: the user pays XEC on-chain and the desk spends
  * 7 PAW from inventory (1 burned + 6 listing retained). No remint, no PoW.
  */
+import { Address } from 'ecash-lib';
 import { prepareDanaNote } from '../../../src/offering/animalProfileFields.js';
 import { burnOnePaw, explorerTx } from '../../../src/offering/burnPaw.js';
 import { consumePaidAction, paidActionFeeInfo } from './paidAction.js';
@@ -35,14 +36,18 @@ export async function createPaidProfile(input: {
     minDeskPaw: MIN_DESK_PAW_PER_PROFILE,
     run: async ({ dep, tipWallet, feeXec }) => {
       const note = prepareDanaNote(input.note, Boolean(input.parentBurnTxid));
+      /* Embed the verified payer's hash160 in the DANA payload so ownership
+         is recoverable from the chain alone (index rebuilt from Chronik). */
+      const creatorHash160 = Address.parse(input.address.trim()).hash;
       const burn = await burnOnePaw({
         wallet: tipWallet.wallet,
         tokenId: dep.tokenId!,
         note,
         parentBurnTxid: input.parentBurnTxid,
+        creatorHash160,
         burnAtoms: 1n,
       });
-      notifyDanaIndex(burn.txid, input.installId);
+      notifyDanaIndex(burn.txid, input.installId, input.address);
       rememberRootCreator(input.parentBurnTxid || burn.txid, input.installId);
       return {
         ok: true as const,

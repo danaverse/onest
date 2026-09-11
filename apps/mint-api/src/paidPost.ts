@@ -41,7 +41,7 @@ export async function createPaidPost(input: {
         pushdata: encodePostStampPushdata(contentHash),
         burnAtoms: 1n,
       });
-      notifyDanaIndex(burn.txid, input.installId);
+      notifyDanaIndex(burn.txid, input.installId, input.address);
       return {
         ok: true as const,
         burnTxid: burn.txid,

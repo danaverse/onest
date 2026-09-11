@@ -50,6 +50,7 @@ export function indexedBurnFromPush(
   memorial: MemorialFields,
   nowIso = new Date().toISOString(),
   senderAddress?: string | null,
+  creator?: { installId?: string | null; address?: string | null },
 ): IndexedBurn | null {
   if (!tx.txid) return null;
   if (memorial.version !== 1 && memorial.version !== 2) return null;
@@ -69,6 +70,8 @@ export function indexedBurnFromPush(
     timeFirstSeen: nowIso,
     burnAtoms: burnAtomsFromTx(tx, tokenId),
     senderAddress: senderAddress?.trim().toLowerCase() || undefined,
+    creatorInstallId: creator?.installId?.trim() || undefined,
+    creatorAddress: creator?.address?.trim().toLowerCase() || undefined,
   };
 }
 
@@ -111,6 +114,8 @@ export interface RouteDanaTxOpts {
   social?: SocialStore;
   burnedBy?: string | null;
   voterInstall?: string | null;
+  creatorInstallId?: string | null;
+  creatorAddress?: string | null;
   nowIso?: string;
 }
 
@@ -126,9 +131,27 @@ export function routeDanaTx(opts: RouteDanaTxOpts): RouteResult {
       push.memorial,
       opts.nowIso,
       opts.burnedBy,
+      { installId: opts.creatorInstallId, address: opts.creatorAddress },
     );
     if (item && opts.burnStore.insert(item)) {
       return { memorial: true, post: false, vote: false };
+    }
+    /* Already indexed: fill in creator attribution if it was unknown. */
+    const creatorInstallId = opts.creatorInstallId?.trim();
+    const creatorAddress = opts.creatorAddress?.trim().toLowerCase();
+    if (creatorInstallId || creatorAddress) {
+      const existing = opts.burnStore.get(tx.txid.toLowerCase());
+      if (
+        existing &&
+        ((creatorInstallId && !existing.creatorInstallId) ||
+          (creatorAddress && !existing.creatorAddress))
+      ) {
+        opts.burnStore.update(existing.burnTxid, {
+          creatorInstallId: existing.creatorInstallId || creatorInstallId,
+          creatorAddress: existing.creatorAddress || creatorAddress,
+        });
+        return { memorial: true, post: false, vote: false };
+      }
     }
     return NO_ROUTE;
   }

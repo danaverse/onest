@@ -8,6 +8,7 @@ import type { Wallet } from 'ecash-wallet';
 import { pickBurnPostageUtxo } from '../mint/fuelUtxo.js';
 import {
   memorialPushdata,
+  memorialPushdataWithCreator,
   OFFERING_ID_PAW,
   parseParentBurnTxidHex,
 } from './danaMemorial.js';
@@ -73,6 +74,8 @@ export async function burnOnePaw(opts: {
   changeScript?: Script;
   /** Raw DANA pushdata override (v3 vote / v4 post stamp). */
   pushdata?: Uint8Array;
+  /** When set, stamp a v5 memorial carrying the creator's P2PKH hash160. */
+  creatorHash160?: string;
   /** PAW atoms sent to the desk as a listing fee (user-paid burns only). */
   feeAtoms?: bigint;
   /** Desk address receiving the listing fee; required when feeAtoms > 0. */
@@ -149,7 +152,16 @@ export async function burnOnePaw(opts: {
     }
     tokenActions.push({
       type: 'DATA',
-      data: opts.pushdata ?? memorialPushdata(note, offeringId, parentBurnTxid),
+      data:
+        opts.pushdata ??
+        (opts.creatorHash160
+          ? memorialPushdataWithCreator(
+              note,
+              opts.creatorHash160,
+              offeringId,
+              parentBurnTxid,
+            )
+          : memorialPushdata(note, offeringId, parentBurnTxid)),
     });
 
     const built = opts.wallet

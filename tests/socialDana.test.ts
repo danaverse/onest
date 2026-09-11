@@ -1,4 +1,8 @@
-import { memorialPushdata, OFFERING_ID_PAW } from '../src/offering/danaMemorial.js';
+import {
+  memorialPushdata,
+  memorialPushdataWithCreator,
+  OFFERING_ID_PAW,
+} from '../src/offering/danaMemorial.js';
 import {
   encodePostStampPushdata,
   encodeVotePushdata,
@@ -88,6 +92,14 @@ describe('DANA classifier', () => {
       memorialPushdata('Tribute', OFFERING_ID_PAW, POST_HASH),
     );
     expect(parented?.kind).toBe('memorial');
+
+    const withCreator = classifyDanaPush(
+      memorialPushdataWithCreator('Luna', 'cd'.repeat(20), OFFERING_ID_PAW),
+    );
+    expect(withCreator?.kind).toBe('memorial');
+    if (withCreator?.kind === 'memorial') {
+      expect(withCreator.memorial.creatorHash160).toBe('cd'.repeat(20));
+    }
 
     const vote = classifyDanaPush(
       encodeVotePushdata({ direction: VOTE_DIRECTION_UP, postHash: POST_HASH }),

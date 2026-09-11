@@ -47,4 +47,4 @@ Feed, trending, post detail and pet-post responses include `pet: { name, species
 - `paw-token` — newest processed txid, for incremental catch-up each poll
 - `paw-token-backfill-page` — deep-history backfill page, one page per pass until done
 
-DANA payloads are routed by version: v1/v2 memorial → JSON `BurnStore`, v3 vote → `votes` table + atom tallies, v4 post stamp → `posts.status = 'verified'`.
+DANA payloads are routed by version: v1/v2/v5 memorial → JSON `BurnStore` (v5 carries the creator's hash160 for on-chain ownership), v3 vote → `votes` table + atom tallies, v4 post stamp → `posts.status = 'verified'`.

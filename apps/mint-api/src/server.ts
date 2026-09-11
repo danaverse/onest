@@ -27,7 +27,7 @@ import {
   requireMintDesk,
   WaitNotElapsedError,
 } from './offer.js';
-import { checkRootCreator } from './rootCreators.js';
+import { checkRootCreator, listRootCreators } from './rootCreators.js';
 import { createPaidProfile, profileFeeInfo } from './paidProfile.js';
 import { createPaidPost, postFeeInfo } from './paidPost.js';
 import {
@@ -296,7 +296,22 @@ try {
   console.warn('Notice starting mint desk:', err);
 }
 
+/**
+ * Re-notify remembered roots once at startup so older desk-paid profiles
+ * (whose burn sender is the desk) get creator attribution in dana-index.
+ */
+async function reindexRememberedRoots(): Promise<void> {
+  const roots = listRootCreators().slice(-500);
+  for (const { txid, installId } of roots) {
+    notifyDanaIndex(txid, installId);
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+}
+
 server.listen(PORT, () => {
   console.log(`Onest mint-api listening on :${PORT} startedAt=${STARTED_AT}`);
   startMorningReminderLoop();
+  void reindexRememberedRoots().catch(err =>
+    console.warn('root reindex failed:', err),
+  );
 });

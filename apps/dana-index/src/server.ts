@@ -395,11 +395,12 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && normPath === '/api/pets') {
       const address = (url.searchParams.get('address') || '').trim().toLowerCase();
-      if (!address) {
-        json(res, 400, { error: 'address required' });
+      const installId = (url.searchParams.get('installId') || '').trim();
+      if (!address && !installId) {
+        json(res, 400, { error: 'address or installId required' });
         return;
       }
-      const pets = store.petsForSender(address).map(g => ({
+      const pets = store.petsForSender(address, installId).map(g => ({
         txid: g.originalBurnTxid,
         name: profileBareNameFromNote(g.originalNote) || 'Beloved pet',
         species: parseAnimalProfileNote(g.originalNote)?.species || '',
@@ -622,10 +623,21 @@ const server = createServer(async (req, res) => {
         json(res, 400, { error: 'valid burnTxid required' });
         return;
       }
-      const voterInstall =
+      const installId =
         typeof body.installId === 'string' ? body.installId.trim() : null;
+      const bodyAddress =
+        typeof body.creatorAddress === 'string'
+          ? body.creatorAddress.trim().toLowerCase()
+          : '';
+      const boundAddress = installId
+        ? social.getUser(installId)?.address ?? null
+        : null;
       if (TOKEN_ID) {
-        void ingestTxid(chronik, store, social, txid, TOKEN_ID, { voterInstall });
+        void ingestTxid(chronik, store, social, txid, TOKEN_ID, {
+          voterInstall: installId,
+          creatorInstallId: installId,
+          creatorAddress: bodyAddress || boundAddress,
+        });
       }
       json(res, 200, { ok: true });
       return;

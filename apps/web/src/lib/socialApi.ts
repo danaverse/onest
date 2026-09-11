@@ -163,11 +163,15 @@ export interface MyPetSummary {
   at: string;
 }
 
-/** Pet profiles whose root burn was sent by this wallet address. */
-export async function fetchMyPets(address: string): Promise<MyPetSummary[]> {
-  const res = await fetch(
-    `${apiBase()}/api/pets?address=${encodeURIComponent(address)}`,
-  );
+/** Pet profiles created by this wallet/install (desk- or wallet-paid). */
+export async function fetchMyPets(
+  address: string,
+  installId?: string,
+): Promise<MyPetSummary[]> {
+  const params = new URLSearchParams();
+  if (address) params.set('address', address);
+  if (installId) params.set('installId', installId);
+  const res = await fetch(`${apiBase()}/api/pets?${params.toString()}`);
   if (!res.ok) throw await errorFrom(res, 'My pets');
   const data = await res.json();
   return data.pets ?? [];

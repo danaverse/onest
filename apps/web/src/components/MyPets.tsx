@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
+import { getOrCreateInstallId } from '../lib/config.js';
 import { fetchMyPets, type MyPetSummary } from '../lib/socialApi.js';
 import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
@@ -43,7 +44,7 @@ export function MyPets(props: {
     }
     setLoading(true);
     setErr(null);
-    fetchMyPets(wallet.address)
+    fetchMyPets(wallet.address, getOrCreateInstallId())
       .then(list => {
         if (!cancelled) setPets(list);
       })
