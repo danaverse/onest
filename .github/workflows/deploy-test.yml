@@ -37,7 +37,7 @@ jobs:
         env:
           VITE_PUBLIC_SITE_ORIGIN: ${{ vars.VITE_PUBLIC_SITE_ORIGIN || 'https://test.onest.pet' }}
           VITE_PAW_TOKEN_ID: ${{ vars.VITE_PAW_TOKEN_ID || secrets.VITE_PAW_TOKEN_ID || '' }}
-          VITE_PAW_TICKER: ${{ vars.VITE_PAW_TICKER || 'PAW' }}
+          VITE_PAW_TICKER: ${{ vars.VITE_PAW_TICKER || 'tPAW' }}
         run: |
           npm run build
           npm run web:build
@@ -70,6 +70,8 @@ jobs:
           SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
           WEB_DEST: ${{ vars.TEST_WEB_PATH || secrets.TEST_WEB_PATH || '/var/www/onest-test' }}
           REPO_DEST: ${{ vars.TEST_REPO_PATH || secrets.TEST_REPO_PATH || '/opt/onest' }}
+          TEST_DESK_SEEDS: ${{ secrets.TEST_DESK_SEEDS }}
+          SOFT_WAIT: ${{ vars.MINT_MIN_PRAY_SECONDS || '54' }}
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -115,26 +117,23 @@ jobs:
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
             cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
 
-          echo "Syncing soft-wait config into environment..."
-          SOFT_WAIT="${{ vars.MINT_MIN_PRAY_SECONDS || '54' }}"
+          echo "Provisioning tPAW desk (never WLotus) from TEST_DESK_SEEDS..."
+          if [ -z "$TEST_DESK_SEEDS" ]; then
+            echo "::error::Missing TEST_DESK_SEEDS secret. The test desk cannot create tPAW without it."
+            exit 1
+          fi
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p /tmp && rm -f /tmp/onest-desk-seed"
+          printf '%s\n' "$TEST_DESK_SEEDS" | $SSH_CMD "${SSH_USER}@${SSH_HOST}" "cat > /tmp/onest-desk-seed && chmod 600 /tmp/onest-desk-seed"
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            touch '${REPO_DEST}/.env' 2>/dev/null || true; \
-            sed -i '/^MINT_MIN_PRAY_SECONDS=/d' '${REPO_DEST}/.env' 2>/dev/null || true; \
-            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' >> '${REPO_DEST}/.env' 2>/dev/null || true; \
-            mkdir -p '${REPO_DEST}/apps/mint-api' 2>/dev/null || true; \
-            touch '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
-            sed -i '/^MINT_MIN_PRAY_SECONDS=/d' '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
-            echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' >> '${REPO_DEST}/apps/mint-api/.env' 2>/dev/null || true; \
-            (sudo mkdir -p /etc/onest && \
-             sudo touch /etc/onest/mint.env && \
-             sudo sed -i '/^MINT_MIN_PRAY_SECONDS=/d' /etc/onest/mint.env && \
-             echo 'MINT_MIN_PRAY_SECONDS=${SOFT_WAIT}' | sudo tee -a /etc/onest/mint.env > /dev/null && \
-             sudo chmod 600 /etc/onest/mint.env) 2>/dev/null || true"
-
-          echo "Restarting services (social DB migrations run at dana-index startup)..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo systemctl try-restart onest-dana-index 2>/dev/null || systemctl try-restart onest-dana-index 2>/dev/null || true; \
-            sudo systemctl try-restart onest-mint-api 2>/dev/null || systemctl try-restart onest-mint-api 2>/dev/null || true"
+            sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
+            sudo env \
+              TEST_DESK_SEEDS=\"\$(sudo cat /tmp/onest-desk-seed)\" \
+              REPO_DEST='${REPO_DEST}' \
+              WEB_DEST='${WEB_DEST}' \
+              MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
+              PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
+              bash '${REPO_DEST}/scripts/provision-test-tpaw.sh' && \
+            sudo rm -f /tmp/onest-desk-seed"
 
           # Clean up private key from runner
           rm -f ~/.ssh/deploy_key
@@ -146,13 +145,27 @@ jobs:
           SMOKE_URL: ${{ vars.TEST_SMOKE_URL || secrets.TEST_SMOKE_URL || 'https://test.onest.pet' }}
         run: |
           echo "Running smoke check against ${SMOKE_URL}..."
-          for i in {1..6}; do
-            if curl -fsSL --retry 3 --retry-delay 2 "${SMOKE_URL}" | grep -q "Loving Animal Memories"; then
-              echo "Smoke check passed: ${SMOKE_URL} is live and serving 'Loving Animal Memories'."
+          for i in {1..8}; do
+            html_ok=0
+            api_ok=0
+            if curl -fsSL --retry 2 --retry-delay 2 "${SMOKE_URL}" | grep -q "Loving Animal Memories"; then
+              html_ok=1
+            fi
+            status="$(curl -fsSL --retry 2 --retry-delay 2 "${SMOKE_URL}/api/status" || true)"
+            ticker="$(printf '%s' "$status" | sed -n 's/.*"ticker":"\([^"]*\)".*/\1/p')"
+            if printf '%s' "$status" | grep -q 'wlotus-mint-api\|"ticker":"WLOTUS"'; then
+              echo "::error::test.onest.pet is still serving WLotus. Abort."
+              exit 1
+            fi
+            if [ "$ticker" = "tPAW" ]; then
+              api_ok=1
+            fi
+            if [ "$html_ok" -eq 1 ] && [ "$api_ok" -eq 1 ]; then
+              echo "Smoke check passed: ${SMOKE_URL} is live on tPAW (not WLotus)."
               exit 0
             fi
-            echo "Waiting for live update... ($i/6)"
+            echo "Waiting for live update... ($i/8) html_ok=$html_ok ticker=${ticker:-none}"
             sleep 5
           done
-          echo "::error::Smoke check failed: Expected title 'Loving Animal Memories' not found at ${SMOKE_URL}"
+          echo "::error::Smoke check failed: expected Onest HTML + /api/status ticker tPAW at ${SMOKE_URL}"
           exit 1
