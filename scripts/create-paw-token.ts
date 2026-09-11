@@ -172,7 +172,11 @@ async function main(): Promise<void> {
       console.log('='.repeat(70));
     }
     wallet = Wallet.fromMnemonic(mnemonic.trim(), chronik);
-    sourceDesc = isNew ? 'newly generated mnemonic (.env)' : 'mnemonic from .env';
+    sourceDesc = isNew
+      ? 'newly generated mnemonic (.env)'
+      : process.env.TEST_DESK_SEEDS?.trim()
+        ? 'TEST_DESK_SEEDS'
+        : 'mnemonic from .env';
   }
 
   await wallet.sync();
