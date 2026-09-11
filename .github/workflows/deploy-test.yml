@@ -125,34 +125,14 @@ jobs:
 
           echo "Updating backend code permissions..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            if id deploy >/dev/null 2>&1; then sudo chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true; \
-            else sudo chown -R '${SSH_USER}:${SSH_USER}' '${REPO_DEST}' 2>/dev/null || true; fi"
+            sudo -n /usr/bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || \
+            sudo -n /bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true"
 
-          if [ -n "$TEST_DESK_SEEDS" ]; then
-            echo "Provisioning tPAW desk from TEST_DESK_SEEDS..."
-            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p /tmp && rm -f /tmp/onest-desk-seed"
-            printf '%s\n' "$TEST_DESK_SEEDS" | $SSH_CMD "${SSH_USER}@${SSH_HOST}" "cat > /tmp/onest-desk-seed && chmod 600 /tmp/onest-desk-seed"
-            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-              sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
-              sudo env \
-                TEST_DESK_SEEDS=\"\$(sudo cat /tmp/onest-desk-seed)\" \
-                REPO_DEST='${REPO_DEST}' \
-                WEB_DEST='${WEB_DEST}' \
-                MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
-                PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
-                bash '${REPO_DEST}/scripts/provision-test-tpaw.sh' && \
-              sudo rm -f /tmp/onest-desk-seed"
-          else
-            echo "TEST_DESK_SEEDS not set; refreshing existing tPAW desk from /etc/onest/mint.env"
-            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-              sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
-              sudo env \
-                REPO_DEST='${REPO_DEST}' \
-                WEB_DEST='${WEB_DEST}' \
-                MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
-                PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
-                bash '${REPO_DEST}/scripts/provision-test-tpaw.sh'"
-          fi
+          echo "Restarting Onest tPAW services as deploy (NOPASSWD systemctl only; do not sudo the provision script)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            chmod +x '${REPO_DEST}/scripts/refresh-test-onest.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
+            REPO_DEST='${REPO_DEST}' PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
+              bash '${REPO_DEST}/scripts/refresh-test-onest.sh'"
 
           # Clean up private key from runner
           rm -f ~/.ssh/deploy_key
