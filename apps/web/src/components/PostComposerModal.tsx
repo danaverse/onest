@@ -19,6 +19,7 @@ export function PostComposerModal(props: {
   initialPetTxid?: string;
   onClose: () => void;
   onSuccess?: () => void;
+  onCreateProfile?: () => void;
 }) {
   const { t } = useLocale();
   const [petTxid, setPetTxid] = useState(
@@ -150,7 +151,19 @@ export function PostComposerModal(props: {
                 </select>
               </div>
             ) : (
-              <p className="empty-hint">{t('createProfileFirst')}</p>
+              <div className="empty-hint-block">
+                <p className="empty-hint">{t('createProfileFirst')}</p>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    props.onClose();
+                    props.onCreateProfile?.();
+                  }}
+                >
+                  {t('newProfile')}
+                </button>
+              </div>
             )}
 
             <div className="form-group">

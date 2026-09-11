@@ -257,18 +257,18 @@ export default function App() {
               </section>
             ) : (
               <>
-                {pages.length > 0 && (
-                  <section className="pages-section">
-                    <div className="feed-head">
-                      <h2>{t('belovedPages')}</h2>
-                      <button
-                        type="button"
-                        className="btn-tribute-link"
-                        onClick={() => setProfileModal({ open: true })}
-                      >
-                        + {t('newProfile')}
-                      </button>
-                    </div>
+                <section className="pages-section">
+                  <div className="feed-head">
+                    <h2>{t('belovedPages')}</h2>
+                    <button
+                      type="button"
+                      className="btn-tribute-link"
+                      onClick={() => setProfileModal({ open: true })}
+                    >
+                      + {t('newProfile')}
+                    </button>
+                  </div>
+                  {pages.length > 0 ? (
                     <div className="page-strip">
                       {pages.map(p => (
                         <button
@@ -283,8 +283,19 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                  </section>
-                )}
+                  ) : (
+                    <div className="create-pet-card">
+                      <p className="empty-hint">{t('noPagesYet')}</p>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => setProfileModal({ open: true })}
+                      >
+                        {t('newProfile')}
+                      </button>
+                    </div>
+                  )}
+                </section>
 
                 <section className="timeline-section">
                   <div className="feed-head">
@@ -386,6 +397,7 @@ export default function App() {
         pets={pets}
         initialPetTxid={composer.petTxid}
         onClose={() => setComposer({ open: false })}
+        onCreateProfile={() => setProfileModal({ open: true })}
         onSuccess={() => {
           loadPosts();
           loadFeed();

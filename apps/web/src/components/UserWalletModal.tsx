@@ -19,6 +19,7 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!props.open) return;
@@ -29,6 +30,7 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
     setRevealed(null);
     setDone(false);
     setMnemonic('');
+    setCopied(false);
     setView('auto');
   }, [props.open]);
 
@@ -190,7 +192,24 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
             <div className="wallet-address-row">
               <span className="tx-label">{t('walletAddress')}</span>
               <code className="wallet-address">{wallet.address}</code>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={async () => {
+                  if (!wallet.address) return;
+                  try {
+                    await navigator.clipboard.writeText(wallet.address);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                {copied ? t('linkCopied') : t('copyAddress')}
+              </button>
             </div>
+            <p className="pow-hint">{t('depositHint')}</p>
             <div className="wallet-actions">
               <button type="button" className="btn-secondary" onClick={() => wallet.refresh()}>
                 {t('refreshBalances')}
