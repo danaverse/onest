@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useLocale } from '../i18n/LocaleContext.js';
 import { formatXecSats } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
-type View = 'auto' | 'create' | 'restore' | 'backup' | 'unlock' | 'menu';
+type View = 'auto' | 'create' | 'restore' | 'backup' | 'unlock' | 'changePin' | 'menu';
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 14)}…${address.slice(-4)}`;
@@ -42,10 +43,12 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
   const [mnemonic, setMnemonic] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [newPin, setNewPin] = useState('');
   const [saved, setSaved] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -56,9 +59,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
     setLocalError(null);
     setPassphrase('');
     setConfirm('');
+    setNewPin('');
     setSaved(false);
     setRevealed(null);
     setDone(false);
+    setNotice(null);
     setMnemonic('');
     setCopied(false);
     setFailedAttempts(0);
@@ -165,6 +170,34 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
     }
   }
 
+  async function handleChangePin(e: React.FormEvent) {
+    e.preventDefault();
+    setLocalError(null);
+    setNotice(null);
+    if (!/^\d{4,12}$/.test(newPin)) {
+      setLocalError(t('pinHint'));
+      return;
+    }
+    if (newPin === passphrase) {
+      setLocalError(t('pinSame'));
+      return;
+    }
+    if (newPin !== confirm) {
+      setLocalError(t('pinMismatch'));
+      return;
+    }
+    try {
+      await wallet.changePin(passphrase, newPin);
+      setPassphrase('');
+      setNewPin('');
+      setConfirm('');
+      setNotice(t('pinChanged'));
+      setView('menu');
+    } catch {
+      /* error surfaced via context */
+    }
+  }
+
   function close() {
     setView('auto');
     props.onClose();
@@ -231,6 +264,7 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
           </div>
         ) : effectiveView === 'menu' ? (
           <div className="wallet-menu">
+            {notice && <div className="status-box">{notice}</div>}
             <div className="wallet-balance-grid wallet-balance-grid--single">
               <div className="wallet-balance-card">
                 <span className="wallet-balance-label">XEC</span>
@@ -238,6 +272,20 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
                   {formatXecSats(wallet.balances?.xecSats)}
                 </span>
               </div>
+            </div>
+            <div className="wallet-receive">
+              <span className="tx-label">{t('receiveXec')}</span>
+              {wallet.address && (
+                <div className="wallet-qr">
+                  <QRCodeSVG
+                    value={wallet.address}
+                    size={168}
+                    marginSize={2}
+                    title={t('receiveXec')}
+                  />
+                </div>
+              )}
+              <p className="pow-hint">{t('receiveHint')}</p>
             </div>
             <div className="wallet-address-row">
               <span className="tx-label">{t('walletAddress')}</span>
@@ -264,6 +312,20 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
               <button type="button" className="btn-secondary" onClick={() => wallet.refresh()}>
                 {t('refreshBalances')}
               </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setLocalError(null);
+                  setNotice(null);
+                  setPassphrase('');
+                  setNewPin('');
+                  setConfirm('');
+                  setView('changePin');
+                }}
+              >
+                {t('changePin')}
+              </button>
               <button type="button" className="btn-secondary" onClick={() => setView('backup')}>
                 {t('backupSeed')}
               </button>
@@ -276,6 +338,64 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
             </div>
             <p className="pow-hint">{t('seedWarning')}</p>
           </div>
+        ) : effectiveView === 'changePin' ? (
+          <form onSubmit={handleChangePin}>
+            <div className="form-group">
+              <label>{t('currentPin')}</label>
+              <PinInput
+                value={passphrase}
+                onChange={setPassphrase}
+                placeholder={t('pinHint')}
+                autoFocus
+                disabled={wallet.busy}
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('newPin')}</label>
+              <PinInput
+                value={newPin}
+                onChange={setNewPin}
+                placeholder={t('pinHint')}
+                disabled={wallet.busy}
+              />
+            </div>
+            <div className="form-group">
+              <label>{t('confirmPin')}</label>
+              <PinInput
+                value={confirm}
+                onChange={setConfirm}
+                disabled={wallet.busy}
+              />
+            </div>
+            {error && <div className="error-box">{error}</div>}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setLocalError(null);
+                  setPassphrase('');
+                  setNewPin('');
+                  setConfirm('');
+                  setView('menu');
+                }}
+              >
+                {t('back')}
+              </button>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={
+                  wallet.busy ||
+                  passphrase.length < 4 ||
+                  newPin.length < 4 ||
+                  confirm.length < 4
+                }
+              >
+                {t('changePin')}
+              </button>
+            </div>
+          </form>
         ) : effectiveView === 'create' ? (
           <form onSubmit={handleCreate}>
             <p className="seed-warning">{t('seedWarning')}</p>

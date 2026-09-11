@@ -100,6 +100,28 @@ export async function unlockVault(
   return { wallet, address: wallet.address };
 }
 
+/**
+ * Re-encrypt the vault under a new PIN. The seed, address and device pepper
+ * stay the same; only the PIN wrapping changes.
+ */
+export async function changeVaultPin(
+  currentPin: string,
+  newPin: string,
+): Promise<StoredVault> {
+  if (!validateUserPin(newPin)) throw new Error('PIN must be 4–12 digits');
+  const vault = await loadVault();
+  if (!vault) throw new Error('No user profile on this device');
+  const pepper = await vaultPepper(vault);
+  const mnemonic = await decryptSeed(vault.blob, currentPin, { pepper });
+  const next: StoredVault = {
+    ...vault,
+    blob: await encryptSeed(mnemonic, newPin, { pepper }),
+    pinLength: newPin.trim().length,
+  };
+  await saveVault(next);
+  return next;
+}
+
 export async function exportVaultMnemonic(pin: string): Promise<string> {
   const vault = await loadVault();
   if (!vault) throw new Error('No user profile on this device');
