@@ -21,19 +21,23 @@ export function MyPets(props: {
   const [pin, setPin] = useState('');
   const [unlocking, setUnlocking] = useState(false);
 
-  async function handleUnlock(e: React.FormEvent) {
-    e.preventDefault();
-    if (unlocking || pin.length < 4) return;
+  async function unlockNow(value: string) {
+    if (unlocking || wallet.busy || value.length < 4) return;
     setUnlocking(true);
     setErr(null);
     try {
-      await wallet.unlock(pin);
+      await wallet.unlock(value);
       setPin('');
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Wrong PIN');
     } finally {
       setUnlocking(false);
     }
+  }
+
+  async function handleUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    await unlockNow(pin);
   }
 
   useEffect(() => {
@@ -87,9 +91,14 @@ export function MyPets(props: {
               placeholder={t('pinHint')}
               value={pin}
               disabled={unlocking}
-              onChange={e =>
-                setPin(e.target.value.replace(/\D/g, '').slice(0, 12))
-              }
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+                setPin(v);
+                /* Windows Hello style: unlock as soon as the full PIN is in. */
+                if (wallet.pinLength && v.length === wallet.pinLength) {
+                  void unlockNow(v);
+                }
+              }}
             />
             <button
               type="submit"

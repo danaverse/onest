@@ -136,11 +136,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
     }
   }
 
-  async function handleUnlock(e: React.FormEvent) {
-    e.preventDefault();
-    if (cooldownRemaining > 0) return;
+  async function unlockNow(value: string) {
+    if (cooldownRemaining > 0 || wallet.busy) return;
+    if (value.length < 4) return;
     try {
-      await wallet.unlock(passphrase);
+      await wallet.unlock(value);
       setFailedAttempts(0);
     } catch {
       const next = failedAttempts + 1;
@@ -149,6 +149,11 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
         setCooldownUntil(Date.now() + 15_000);
       }
     }
+  }
+
+  async function handleUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    await unlockNow(passphrase);
   }
 
   async function handleReveal(e: React.FormEvent) {
@@ -405,7 +410,13 @@ export function UserWalletModal(props: { open: boolean; onClose: () => void }) {
               <label>{t('pin')}</label>
               <PinInput
                 value={passphrase}
-                onChange={setPassphrase}
+                onChange={v => {
+                  setPassphrase(v);
+                  /* Windows Hello style: unlock as soon as the full PIN is in. */
+                  if (wallet.pinLength && v.length === wallet.pinLength) {
+                    void unlockNow(v);
+                  }
+                }}
                 autoFocus
                 disabled={wallet.busy || cooldownRemaining > 0}
               />

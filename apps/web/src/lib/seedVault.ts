@@ -18,6 +18,8 @@ export interface StoredVault {
   createdAt: number;
   /** True when the blob was encrypted with the device pepper. */
   peppered?: boolean;
+  /** PIN length (metadata only) so the UI can auto-unlock at full entry. */
+  pinLength?: number;
 }
 
 export function walletStorageAvailable(): boolean {
