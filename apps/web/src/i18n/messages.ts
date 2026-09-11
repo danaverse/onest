@@ -168,7 +168,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     backToHome: 'Home',
     copyLink: 'Copy link',
     linkCopied: 'Link copied!',
-    userProfile: 'User Profile',
+    userProfile: 'Account',
     createUserProfile: 'Create account',
     restoreUserProfile: 'Restore from seed phrase',
     userProfileIntro:
@@ -215,7 +215,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     themeAppearance: 'Appearance',
     themeLight: 'Light',
     themeDark: 'Dark',
-    openUserProfile: 'Open user profile',
+    openUserProfile: 'Open account',
     copyAddress: 'Copy address',
     depositHint:
       'Send XEC (for network fees) and PAW (1 burn + 6-atom listing fee) to this address before creating an animal profile.',
@@ -281,7 +281,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     backToHome: 'Trang chủ',
     copyLink: 'Sao chép liên kết',
     linkCopied: 'Đã sao chép!',
-    userProfile: 'Hồ sơ người dùng',
+    userProfile: 'Tài khoản',
     createUserProfile: 'Tạo tài khoản',
     restoreUserProfile: 'Khôi phục từ cụm từ hạt giống',
     userProfileIntro:
@@ -328,7 +328,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     themeAppearance: 'Giao diện',
     themeLight: 'Sáng',
     themeDark: 'Tối',
-    openUserProfile: 'Mở hồ sơ người dùng',
+    openUserProfile: 'Mở tài khoản',
     copyAddress: 'Sao chép địa chỉ',
     depositHint:
       'Hãy gửi XEC (phí mạng) và PAW (1 đốt + phí niêm yết 6 atom) vào địa chỉ này trước khi tạo hồ sơ thú cưng.',
@@ -393,7 +393,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     backToHome: '首页',
     copyLink: '复制链接',
     linkCopied: '已复制！',
-    userProfile: '用户资料',
+    userProfile: '账户',
     createUserProfile: '创建账户',
     restoreUserProfile: '从助记词恢复',
     userProfileIntro:
@@ -437,7 +437,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     themeAppearance: '外观',
     themeLight: '浅色',
     themeDark: '深色',
-    openUserProfile: '打开用户资料',
+    openUserProfile: '打开账户',
     copyAddress: '复制地址',
     depositHint: '创建宠物档案前，请先向此地址发送 XEC（网络费）和 PAW（1 销毁 + 6 atom 上架费）。',
     back: '返回',
