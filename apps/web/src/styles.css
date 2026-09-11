@@ -1486,6 +1486,35 @@ body {
   padding: 0.5rem 1rem;
 }
 
+.inline-unlock {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.inline-unlock input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.inline-unlock input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inline-unlock .btn-primary {
+  width: auto;
+  flex: none;
+  padding: 0.5rem 1rem;
+}
+
 .empty-hint-block {
   display: flex;
   flex-direction: column;

@@ -17,6 +17,23 @@ export function MyPets(props: {
   const [pets, setPets] = useState<MyPetSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+
+  async function handleUnlock(e: React.FormEvent) {
+    e.preventDefault();
+    if (unlocking || pin.length < 4) return;
+    setUnlocking(true);
+    setErr(null);
+    try {
+      await wallet.unlock(pin);
+      setPin('');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Wrong PIN');
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +73,41 @@ export function MyPets(props: {
         )}
       </div>
 
-      {wallet.status !== 'unlocked' ? (
+      {wallet.status === 'locked' ? (
+        <div className="create-pet-card">
+          <p className="empty-hint">{t('myPetsLocked')}</p>
+          <form className="inline-unlock" onSubmit={handleUnlock}>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              maxLength={12}
+              placeholder={t('pinHint')}
+              value={pin}
+              disabled={unlocking}
+              onChange={e =>
+                setPin(e.target.value.replace(/\D/g, '').slice(0, 12))
+              }
+            />
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={unlocking || pin.length < 4}
+            >
+              {unlocking ? t('loading') : t('unlockWallet')}
+            </button>
+          </form>
+          {err && <div className="error-box">{err}</div>}
+          <button
+            type="button"
+            className="btn-tribute-link"
+            onClick={props.onRequestWallet}
+          >
+            {t('openUserProfile')}
+          </button>
+        </div>
+      ) : wallet.status !== 'unlocked' ? (
         <div className="create-pet-card">
           <p className="empty-hint">{t('myPetsLocked')}</p>
           <button
@@ -64,7 +115,7 @@ export function MyPets(props: {
             className="btn-primary"
             onClick={props.onRequestWallet}
           >
-            {wallet.address ? t('unlockWallet') : t('createUserProfile')}
+            {t('createUserProfile')}
           </button>
         </div>
       ) : loading ? (
