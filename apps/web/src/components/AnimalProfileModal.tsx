@@ -12,6 +12,8 @@ import { useWallet } from '../wallet/WalletContext.js';
 
 const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 1n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
+/** Enough XEC to split a fuel UTXO and pay the remint fees. */
+const MIN_MINT_XEC_SATS = 12_000n;
 
 export function AnimalProfileModal(props: {
   open: boolean;
@@ -118,6 +120,33 @@ export function AnimalProfileModal(props: {
       setOfferingBlocksPwaReload(false);
       setBusy(false);
       setProgress(null);
+    }
+  }
+
+  async function handleMintPaw() {
+    if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
+      setErr(t('userProfileRequired'));
+      props.onRequestWallet?.();
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    setProgress(null);
+    setOfferingBlocksPwaReload(true);
+    try {
+      const { mintPawFromWallet } = await import('../lib/mintPaw.js');
+      await mintPawFromWallet({
+        wallet: userWallet.wallet,
+        onProgress: setProgress,
+      });
+      await userWallet.refresh();
+      setProgress(t('mintDone'));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Mint failed';
+      setErr(msg === 'MINT_NEED_XEC' ? t('mintNeedXec') : msg);
+    } finally {
+      setOfferingBlocksPwaReload(false);
+      setBusy(false);
     }
   }
 
@@ -280,6 +309,19 @@ export function AnimalProfileModal(props: {
                   {userWallet.address && (
                     <code className="wallet-address">{userWallet.address}</code>
                   )}
+                  {userWallet.status === 'unlocked' &&
+                    userWallet.balances != null &&
+                    userWallet.balances.pawAtoms < MIN_PROFILE_PAW &&
+                    userWallet.balances.xecSats >= MIN_MINT_XEC_SATS && (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={busy}
+                        onClick={handleMintPaw}
+                      >
+                        {t('mintPawFromXec')}
+                      </button>
+                    )}
                   <button
                     type="button"
                     className="btn-secondary"

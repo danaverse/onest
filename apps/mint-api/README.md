@@ -18,6 +18,8 @@ Device PoW challenge/submit desk with fee-sponsored remint and DANA animal memor
 - `GET /api/root-creator` — Check animal profile root creator status `{ txid, installId }`
 - `POST /api/cancel` — Cancel active challenge or pending burn
 - `GET /api/listing-fee` — Quote for wallet-paid burns `{ tokenId, atoms (default 6), feeAddress }`; the user's wallet burns 1 PAW, sends the fee and pays XEC, then broadcasts directly (no wait)
+- `POST /api/mint/client/challenge` — User-paid remint prep `{ installId, address, pkHex, fuelTxid, fuelOutIdx }`: reserves a non-serving baton (prefers genesis index `MINT_CLIENT_BATON_INDEX`, default 26) and returns the BIP143 preimages/PoW material
+- `POST /api/mint/client/submit` — `{ installId, challengeId, nonceHex, batonSigHex, fuelSigHex }`: verifies PoW, assembles the covenant tx with the client's signatures and broadcasts; the minted 108 PAW go to the user's address
 - `POST /api/notify { burnTxid, installId? }` — Forward a wallet-broadcast tx to dana-index for immediate ingest
 - `GET /health` — Health check endpoint
 

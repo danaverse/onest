@@ -141,6 +141,30 @@ export async function findAnyLiveMintBaton(
   };
 }
 
+/** All live (unspent) mint batons for a token, in chronik UTXO order. */
+export async function findLiveMintBatons(
+  chronik: FollowChronik,
+  tokenId: string,
+): Promise<LiveMintBaton[]> {
+  const want = tokenId.toLowerCase();
+  const page = await chronik.tokenId(want).utxos();
+  const batons = (page.utxos ?? []).filter(u => isMintBatonOut(u, want));
+  const out: LiveMintBaton[] = [];
+  for (const baton of batons) {
+    const tx = await chronik.tx(baton.outpoint.txid);
+    out.push({
+      txid: baton.outpoint.txid.toLowerCase(),
+      outIdx: baton.outpoint.outIdx,
+      sats: baton.sats,
+      outputScript: baton.script,
+      creatingTxid: tx.txid.toLowerCase(),
+      creatingLockTime: tx.lockTime,
+      hops: 0,
+    });
+  }
+  return out;
+}
+
 export async function resolveLiveMintBaton(
   chronik: FollowChronik,
   tokenId: string,

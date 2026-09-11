@@ -299,7 +299,7 @@ function resolveDepPath(): string {
   return mainnetPath;
 }
 
-function loadDepJson(): OnestDep {
+export function loadDepJson(): OnestDep {
   const p = resolveDepPath();
   if (existsSync(p)) {
     try {
