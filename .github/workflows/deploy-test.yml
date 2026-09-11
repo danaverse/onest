@@ -39,6 +39,15 @@ jobs:
           VITE_PAW_TOKEN_ID: ${{ vars.VITE_PAW_TOKEN_ID || secrets.VITE_PAW_TOKEN_ID || '' }}
           VITE_PAW_TICKER: ${{ vars.VITE_PAW_TICKER || 'tPAW' }}
         run: |
+          if [ -z "$VITE_PAW_TOKEN_ID" ] && [ -f deployments/test-paw.json ]; then
+            VITE_PAW_TOKEN_ID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('deployments/test-paw.json','utf8')).tokenId || '')")"
+            export VITE_PAW_TOKEN_ID
+            echo "Using tPAW token id from deployments/test-paw.json"
+          fi
+          if [ -z "$VITE_PAW_TOKEN_ID" ]; then
+            echo "::error::Missing VITE_PAW_TOKEN_ID and deployments/test-paw.json. Cannot build the test PWA."
+            exit 1
+          fi
           npm run build
           npm run web:build
 
@@ -109,31 +118,41 @@ jobs:
             ./ \
             "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
 
-          echo "Updating backend code permissions..."
+          echo "Installing backend dependencies on the VM with Node 22 (WLotus keeps system Node 18)..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo chown -R '${SSH_USER}:${SSH_USER}' '${REPO_DEST}' 2>/dev/null || true"
-
-          echo "Installing backend dependencies on the VM (better-sqlite3, drizzle)..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            export PATH=/usr/local/lib/nodejs-22/bin:/usr/local/bin:/usr/bin:\$PATH && \
             cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
 
-          echo "Provisioning tPAW desk (never WLotus) from TEST_DESK_SEEDS..."
-          if [ -z "$TEST_DESK_SEEDS" ]; then
-            echo "::error::Missing TEST_DESK_SEEDS secret. The test desk cannot create tPAW without it."
-            exit 1
-          fi
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p /tmp && rm -f /tmp/onest-desk-seed"
-          printf '%s\n' "$TEST_DESK_SEEDS" | $SSH_CMD "${SSH_USER}@${SSH_HOST}" "cat > /tmp/onest-desk-seed && chmod 600 /tmp/onest-desk-seed"
+          echo "Updating backend code permissions..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
-            sudo env \
-              TEST_DESK_SEEDS=\"\$(sudo cat /tmp/onest-desk-seed)\" \
-              REPO_DEST='${REPO_DEST}' \
-              WEB_DEST='${WEB_DEST}' \
-              MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
-              PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
-              bash '${REPO_DEST}/scripts/provision-test-tpaw.sh' && \
-            sudo rm -f /tmp/onest-desk-seed"
+            if id deploy >/dev/null 2>&1; then sudo chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true; \
+            else sudo chown -R '${SSH_USER}:${SSH_USER}' '${REPO_DEST}' 2>/dev/null || true; fi"
+
+          if [ -n "$TEST_DESK_SEEDS" ]; then
+            echo "Provisioning tPAW desk from TEST_DESK_SEEDS..."
+            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p /tmp && rm -f /tmp/onest-desk-seed"
+            printf '%s\n' "$TEST_DESK_SEEDS" | $SSH_CMD "${SSH_USER}@${SSH_HOST}" "cat > /tmp/onest-desk-seed && chmod 600 /tmp/onest-desk-seed"
+            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+              sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
+              sudo env \
+                TEST_DESK_SEEDS=\"\$(sudo cat /tmp/onest-desk-seed)\" \
+                REPO_DEST='${REPO_DEST}' \
+                WEB_DEST='${WEB_DEST}' \
+                MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
+                PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
+                bash '${REPO_DEST}/scripts/provision-test-tpaw.sh' && \
+              sudo rm -f /tmp/onest-desk-seed"
+          else
+            echo "TEST_DESK_SEEDS not set; refreshing existing tPAW desk from /etc/onest/mint.env"
+            $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+              sudo chmod +x '${REPO_DEST}/scripts/provision-test-tpaw.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
+              sudo env \
+                REPO_DEST='${REPO_DEST}' \
+                WEB_DEST='${WEB_DEST}' \
+                MINT_MIN_PRAY_SECONDS='${SOFT_WAIT}' \
+                PUBLIC_SITE_ORIGIN='https://test.onest.pet' \
+                bash '${REPO_DEST}/scripts/provision-test-tpaw.sh'"
+          fi
 
           # Clean up private key from runner
           rm -f ~/.ssh/deploy_key
