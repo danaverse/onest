@@ -265,7 +265,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     noCommentsYet: 'Chưa có bình luận nào.',
     commentPlaceholder: 'Gửi lời nhắn yêu thương...',
     sendComment: 'Gửi',
-    shareMomentPlaceholder: 'Chia sẻ khoảnh khắc cùng bé yêu...',
+    shareMomentPlaceholder: 'Chia sẻ khoảnh khắc cùng những dấu chân yêu thương...',
     search: 'Tìm',
     searchResults: 'Kết quả tìm kiếm',
     belovedPages: 'Trang thú cưng',

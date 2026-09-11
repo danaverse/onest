@@ -15,6 +15,14 @@ export function speciesEmoji(species: string | null | undefined): string {
   }
 }
 
+/** 1 XEC = 100 sats; compact display with at most 2 decimals. */
+export function formatXecSats(sats: bigint | number | null | undefined): string {
+  if (sats == null) return '—';
+  return (Number(sats) / 100).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+}
+
 export function relativeTime(ms: number): string {
   const diff = Date.now() - ms;
   const minutes = Math.floor(diff / 60_000);
