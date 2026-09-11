@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Tx } from 'chronik-client';
-import { memorialPushdata, OFFERING_ID_PAW } from '../src/offering/danaMemorial.js';
+import {
+  memorialPushdata,
+  memorialPushdataWithCreator,
+  OFFERING_ID_PAW,
+} from '../src/offering/danaMemorial.js';
 import {
   encodePostStampPushdata,
   encodeVotePushdata,
@@ -130,6 +134,27 @@ describe('tx routing', () => {
     const stored = burns.get(tx.txid);
     expect(stored?.creatorInstallId).toBe('install-luna');
     expect(stored?.creatorAddress).toBe('ecash:qqcreator');
+  });
+
+  it('routes v5 memorial pushes (creator hash160) as memorials', () => {
+    const tx = fakeTx({ txid: '13'.repeat(32), token: true, blockHeight: 12, blockTs: 1002 });
+    const push = pushOf(
+      memorialPushdataWithCreator('Laika', '9a'.repeat(20), OFFERING_ID_PAW),
+    );
+    expect(push.kind).toBe('memorial');
+    expect(push.kind === 'memorial' && push.memorial.version).toBe(5);
+
+    const result = routeDanaTx({
+      tx,
+      tokenId: TOKEN,
+      push,
+      burnStore: burns,
+      creatorAddress: 'ECASH:QQLaika',
+    });
+    expect(result.memorial).toBe(true);
+    const stored = burns.get(tx.txid);
+    expect(stored?.version).toBe(5);
+    expect(stored?.creatorAddress).toBe('ecash:qqlaika');
   });
 
   it('ignores txs that do not touch the PAW token', () => {

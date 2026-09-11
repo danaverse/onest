@@ -4,7 +4,10 @@
  */
 import type { Tx } from 'chronik-client';
 import { burnAtomsFromTokenEntries } from '../../../../src/offering/pawAtoms.js';
-import type { MemorialFields } from '../../../../src/offering/danaMemorial.js';
+import {
+  isMemorialVersion,
+  type MemorialFields,
+} from '../../../../src/offering/danaMemorial.js';
 import type { DanaPush } from '../../../../src/social/danaClassify.js';
 import type { PostStampFields, VoteFields } from '../../../../src/social/danaSocial.js';
 import { VOTE_DIRECTION_UP } from '../../../../src/social/danaSocial.js';
@@ -53,7 +56,7 @@ export function indexedBurnFromPush(
   creator?: { installId?: string | null; address?: string | null },
 ): IndexedBurn | null {
   if (!tx.txid) return null;
-  if (memorial.version !== 1 && memorial.version !== 2) return null;
+  if (!isMemorialVersion(memorial.version)) return null;
 
   const parent = memorial.parentBurnTxid?.toLowerCase();
   const burnTxid = tx.txid.toLowerCase();
