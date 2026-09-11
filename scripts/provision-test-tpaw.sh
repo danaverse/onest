@@ -14,7 +14,7 @@ DANA_ENV="${ONEST_DANA_INDEX_ENV:-/etc/onest/dana-index.env}"
 MINT_PORT="${MINT_API_PORT:-9787}"
 DANA_PORT="${DANA_INDEX_PORT:-9788}"
 SITE_ORIGIN="${PUBLIC_SITE_ORIGIN:-https://test.onest.pet}"
-CHRONIK_URLS="${CHRONIK_URLS:-https://chronik.e.cash,https://xec.paybutton.org}"
+CHRONIK_URLS="${CHRONIK_URLS:-https://chronik.pay2stay.com/xec,https://chronik.e.cash,https://xec.paybutton.org}"
 SOFT_WAIT="${MINT_MIN_PRAY_SECONDS:-54}"
 NGINX_SRC="$ROOT/deploy/contabo/nginx-onest-test.conf"
 NGINX_DEST="${NGINX_DEST:-/etc/nginx/sites-enabled/onest-test}"
@@ -114,9 +114,12 @@ DANA_INDEX_URL=http://127.0.0.1:${DANA_PORT}
 PUBLIC_SITE_ORIGIN=${SITE_ORIGIN}
 EOF
 
-install -d -m 755 "$REPO_DEST/deploy/contabo"
-install -m 755 "$ROOT/deploy/contabo/run-mint-api.sh" "$REPO_DEST/deploy/contabo/run-mint-api.sh"
-install -m 755 "$ROOT/deploy/contabo/run-dana-index.sh" "$REPO_DEST/deploy/contabo/run-dana-index.sh"
+chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
+if [[ "$(readlink -f "$ROOT")" != "$(readlink -f "$REPO_DEST")" ]]; then
+  install -d -m 755 "$REPO_DEST/deploy/contabo"
+  install -m 755 "$ROOT/deploy/contabo/run-mint-api.sh" "$REPO_DEST/deploy/contabo/run-mint-api.sh"
+  install -m 755 "$ROOT/deploy/contabo/run-dana-index.sh" "$REPO_DEST/deploy/contabo/run-dana-index.sh"
+fi
 install -m 644 "$ROOT/deploy/contabo/onest-mint-api.service" /etc/systemd/system/onest-mint-api.service
 install -m 644 "$ROOT/deploy/contabo/onest-dana-index.service" /etc/systemd/system/onest-dana-index.service
 
