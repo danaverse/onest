@@ -4,7 +4,7 @@
  * Votes are only ever written from Chronik ingest; tallies are updated in the
  * same transaction that inserts the unique vote row (txid).
  */
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import type Database from 'better-sqlite3';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { TRENDING_GRAVITY } from '../../../../src/lib/trendingScore.js';
@@ -178,6 +178,26 @@ export class SocialStore {
         .where(eq(posts.anchorTxid, anchorTxid))
         .get(),
     );
+  }
+
+  hasVote(txid: string): boolean {
+    return Boolean(
+      this.db.select({ txid: votes.txid }).from(votes).where(eq(votes.txid, txid)).get(),
+    );
+  }
+
+  listVerifiedPostsWithAnchor(
+    limit = 500,
+  ): Array<{ id: string; anchorTxid: string }> {
+    return this.db
+      .select({ id: posts.id, anchorTxid: posts.anchorTxid })
+      .from(posts)
+      .where(and(eq(posts.status, 'verified'), isNotNull(posts.anchorTxid)))
+      .limit(limit)
+      .all()
+      .flatMap(row =>
+        row.anchorTxid ? [{ id: row.id, anchorTxid: row.anchorTxid }] : [],
+      );
   }
 
   getPost(id: string, opts?: { includeRemoved?: boolean }): FeedPost | null {

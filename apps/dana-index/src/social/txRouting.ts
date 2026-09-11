@@ -89,24 +89,40 @@ export interface RoutedVote {
   votedAt: number;
 }
 
-export function voteFromPush(
+export function voteRowFromParts(
   tx: Tx,
   tokenId: string,
-  vote: VoteFields,
+  postId: string,
+  direction: number,
   opts?: { burnedBy?: string | null; voterInstall?: string | null },
 ): RoutedVote | null {
   if (!tx.txid) return null;
   const atoms = Number.parseInt(burnAtomsFromTx(tx, tokenId), 10);
   return {
     txid: tx.txid.toLowerCase(),
-    postId: vote.postHash,
-    direction: vote.direction === VOTE_DIRECTION_UP ? 1 : 0,
+    postId,
+    direction: direction === 1 ? 1 : 0,
     atoms: Number.isFinite(atoms) && atoms > 0 ? atoms : 1,
     burnedBy: (opts?.burnedBy || 'unknown').toLowerCase(),
     voterInstall: opts?.voterInstall?.trim() || null,
     blockHeight: tx.block?.height ?? null,
     votedAt: txTimeMs(tx),
   };
+}
+
+export function voteFromPush(
+  tx: Tx,
+  tokenId: string,
+  vote: VoteFields,
+  opts?: { burnedBy?: string | null; voterInstall?: string | null },
+): RoutedVote | null {
+  return voteRowFromParts(
+    tx,
+    tokenId,
+    vote.postHash,
+    vote.direction === VOTE_DIRECTION_UP ? 1 : 0,
+    opts,
+  );
 }
 
 export interface RouteDanaTxOpts {
@@ -162,11 +178,22 @@ export function routeDanaTx(opts: RouteDanaTxOpts): RouteResult {
   if (!opts.social) return NO_ROUTE;
 
   if (push.kind === 'post') {
+    const contentHash = push.post.contentHash;
     const verified = opts.social.verifyPost(
-      push.post.contentHash,
+      contentHash,
       tx.txid.toLowerCase(),
       txTimeMs(tx),
     );
+    if (verified || opts.social.postExists(contentHash)) {
+      /* The creator's stamp burn is the moment's first PAW: count its atoms
+         as an upvote so a fresh post never shows 0. Unique on the stamp txid,
+         so re-routing is a no-op. */
+      const stamp = voteRowFromParts(tx, tokenId, contentHash, 1, {
+        burnedBy: opts.burnedBy,
+        voterInstall: opts.voterInstall,
+      });
+      if (stamp) opts.social.recordVote(stamp);
+    }
     return { memorial: false, post: verified, vote: false };
   }
 

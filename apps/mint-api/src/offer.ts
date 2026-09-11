@@ -411,7 +411,7 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
 
   const kind: BurnKind =
     opts.kind === 'post' ? 'post' : opts.kind === 'vote' ? 'vote' : 'memorial';
-  // Pet profiles are user-paid: the wallet burns 1 PAW + pays the listing fee.
+  // Pet profiles are user-paid: the wallet burns 6 PAW + pays the listing fee.
   // Sponsored memorials are tributes only (they carry parentBurnTxid).
   if (kind === 'memorial' && !opts.parentBurnTxid) {
     throw new Error(
