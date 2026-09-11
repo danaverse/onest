@@ -1,15 +1,15 @@
 /**
  * Flat XEC fee for desk-built pet profiles.
  *
- * When the wallet has no PAW, the user pays a flat XEC fee and the desk burns
- * 1 PAW from inventory (no remint). Default: 20 XEC = 2,000 sats.
+ * When the wallet has no PAW, the user pays a flat XEC fee and the desk spends
+ * 7 PAW from inventory — 1 atom burned for the memorial, 6 atoms listing fee
+ * retained. No remint. Default: 20 XEC = 2,000 sats.
  *
- * Margin math (per profile):
- *   income          2,000 sats (20 XEC)
- *   burn tx fee     ~300–600 sats at 1 sat/byte (token input + postage + OP_RETURN)
- *   1 PAW atom      from desk inventory (issued by sponsored remints, no
- *                   marginal XEC cost on this action)
- *   -> desk margin  ~1,400–1,700 sats (~70–85%)
+ * Margin math (per profile, atoms valued at the 1 XEC/atom reference):
+ *   income             2,000 sats (20 XEC)
+ *   7 PAW atoms        -700 sats (7 XEC: 1 burned + 6 listing retained)
+ *   burn tx fee        ~300–600 sats at 1 sat/byte (token input + postage + OP_RETURN)
+ *   -> desk margin     ~700–1,000 sats (~35–50% of revenue)
  */
 
 export const DEFAULT_PROFILE_XEC_FEE = 20n;
