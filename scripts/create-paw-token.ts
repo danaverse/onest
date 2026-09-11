@@ -63,17 +63,26 @@ import {
   resolveTokenConfig,
   updateEnvFile,
   printUsage,
+  parseDeskSeed,
   type CliOptions,
 } from '../src/params/tokenCli.js';
 
 function loadOrCreateMnemonic(envPath: string): { mnemonic: string; isNew: boolean } {
-  let mnemonic = (process.env.GENESIS_MNEMONIC || process.env.MINT_MNEMONIC)?.trim();
-  if (mnemonic) {
+  const fromSecret = process.env.TEST_DESK_SEEDS?.trim();
+  if (fromSecret) {
+    const mnemonic = parseDeskSeed(fromSecret);
+    process.env.MINT_MNEMONIC = mnemonic;
+    process.env.GENESIS_MNEMONIC = mnemonic;
     return { mnemonic, isNew: false };
   }
 
+  const existing = (process.env.GENESIS_MNEMONIC || process.env.MINT_MNEMONIC)?.trim();
+  if (existing) {
+    return { mnemonic: parseDeskSeed(existing), isNew: false };
+  }
+
   // Generate fresh 12-word BIP39 mnemonic
-  mnemonic = bip39.generateMnemonic(128);
+  const mnemonic = bip39.generateMnemonic(128);
 
   // Read template from .env.example if .env does not exist yet
   let baseContent = '';
@@ -163,7 +172,11 @@ async function main(): Promise<void> {
       console.log('='.repeat(70));
     }
     wallet = Wallet.fromMnemonic(mnemonic.trim(), chronik);
-    sourceDesc = isNew ? 'newly generated mnemonic (.env)' : 'mnemonic from .env';
+    sourceDesc = isNew
+      ? 'newly generated mnemonic (.env)'
+      : process.env.TEST_DESK_SEEDS?.trim()
+        ? 'TEST_DESK_SEEDS'
+        : 'mnemonic from .env';
   }
 
   await wallet.sync();

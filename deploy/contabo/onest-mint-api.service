@@ -1,0 +1,18 @@
+[Unit]
+Description=Onest PAW mint API (tPAW / PAW)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/onest
+Environment=NODE_ENV=production
+Environment=MINT_API_PORT=9787
+Environment=ONEST_MINT_ENV=/etc/onest/mint.env
+ExecStart=/opt/onest/deploy/contabo/run-mint-api.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
