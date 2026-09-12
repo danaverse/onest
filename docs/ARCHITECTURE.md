@@ -302,6 +302,7 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 - Wallet-paid pet profiles: 6 PAW burn (rebirth) + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side, except the first sponsored pet profile per install (6-atom desk burn, ~2 minute wait, `MINT_PROFILE_MIN_PRAY_SECONDS`). Sponsored post stamps are desk-funded too (1 atom, ~1 minute wait, `MINT_POST_MIN_PRAY_SECONDS`) **only on the install's own pets**; posting on other pets requires a 2 PAW wallet burn (1 stamp + 1 to the creator) or the flat XEC fee, in which case the desk burns 1 PAW for the stamp and sends 1 PAW atom to the pet creator
 - Lixi-style home timeline with a composer card and **pet pages** (`/:txid`) showing a pet's moments and paw tributes
 - First-load language: stored choice → IP country (`ipwho.is`, `ipapi.co` fallback, client-side) → browser languages → English; only VN (vi) and CN/TW/HK/MO/SG (zh) are auto-selected, and auto-detection is not persisted
+- Share links carry the sender's locale (`/<txid>?lang=vi`) so Open Graph cards render in that language; crawlers' Accept-Language is ignored (bots lie)
 
 ### Still to add
 
