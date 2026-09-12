@@ -14,6 +14,7 @@ import {
   media,
   postMedia,
   posts,
+  profileMedia,
   users,
   votes,
 } from './schema.js';
@@ -75,6 +76,12 @@ export interface UserRow {
   address: string;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Off-chain profile artwork keys for an on-chain pet root. */
+export interface ProfileMediaLinks {
+  avatar: string | null;
+  banner: string | null;
 }
 
 export interface CommentRow {
@@ -426,6 +433,68 @@ export class SocialStore {
   private attachMedia(rows: Array<typeof posts.$inferSelect>): FeedPost[] {
     const mediaMap = this.mediaForPosts(rows.map(r => r.id));
     return rows.map(row => ({ ...row, media: mediaMap.get(row.id) ?? [] }));
+  }
+
+  // ---------------------------------------------------------- profile media
+
+  /**
+   * Link avatar/banner media to a profile root. Omitted fields keep their
+   * current value; pass null to clear one.
+   */
+  setProfileMedia(input: {
+    petRootTxid: string;
+    avatarSha256?: string | null;
+    bannerSha256?: string | null;
+  }): ProfileMediaLinks {
+    const petRootTxid = input.petRootTxid.trim().toLowerCase();
+    const existing = this.getProfileMedia(petRootTxid);
+    const avatar =
+      input.avatarSha256 === undefined
+        ? (existing?.avatar ?? null)
+        : input.avatarSha256;
+    const banner =
+      input.bannerSha256 === undefined
+        ? (existing?.banner ?? null)
+        : input.bannerSha256;
+    const updatedAt = Date.now();
+    this.db
+      .insert(profileMedia)
+      .values({ petRootTxid, avatarSha256: avatar, bannerSha256: banner, updatedAt })
+      .onConflictDoUpdate({
+        target: profileMedia.petRootTxid,
+        set: { avatarSha256: avatar, bannerSha256: banner, updatedAt },
+      })
+      .run();
+    return { avatar, banner };
+  }
+
+  getProfileMedia(petRootTxid: string): ProfileMediaLinks | null {
+    const row = this.db
+      .select()
+      .from(profileMedia)
+      .where(eq(profileMedia.petRootTxid, petRootTxid.trim().toLowerCase()))
+      .get();
+    if (!row) return null;
+    return { avatar: row.avatarSha256 ?? null, banner: row.bannerSha256 ?? null };
+  }
+
+  /** Batch variant for feed/profile lists: root txid → media links. */
+  profileMediaFor(roots: string[]): Map<string, ProfileMediaLinks> {
+    const out = new Map<string, ProfileMediaLinks>();
+    const ids = [...new Set(roots.map(r => r.trim().toLowerCase()).filter(Boolean))];
+    if (ids.length === 0) return out;
+    const rows = this.db
+      .select()
+      .from(profileMedia)
+      .where(inArray(profileMedia.petRootTxid, ids))
+      .all();
+    for (const row of rows) {
+      out.set(row.petRootTxid, {
+        avatar: row.avatarSha256 ?? null,
+        banner: row.bannerSha256 ?? null,
+      });
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- comments

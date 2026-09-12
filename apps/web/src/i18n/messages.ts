@@ -34,6 +34,9 @@ export type MessageKey =
   | 'choosePet'
   | 'createProfileFirst'
   | 'photo'
+  | 'avatar'
+  | 'banner'
+  | 'associatingPhotos'
   | 'caption'
   | 'captionPlaceholder'
   | 'postFeeHint'
@@ -159,6 +162,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     choosePet: 'For which animal?',
     createProfileFirst: 'Create an animal profile first, then share a moment.',
     photo: 'Photo',
+    avatar: 'Avatar',
+    banner: 'Profile banner',
+    associatingPhotos: 'Saving photos...',
     caption: 'Caption',
     captionPlaceholder: 'A loving memory...',
     postFeeHint:
@@ -291,6 +297,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     choosePet: 'Dành cho bé nào?',
     createProfileFirst: 'Hãy tạo hồ sơ thú cưng trước, rồi chia sẻ khoảnh khắc.',
     photo: 'Ảnh',
+    avatar: 'Ảnh đại diện',
+    banner: 'Ảnh bìa hồ sơ',
+    associatingPhotos: 'Đang lưu ảnh...',
     caption: 'Chú thích',
     captionPlaceholder: 'Một kỷ niệm thương yêu...',
     postFeeHint:
@@ -423,6 +432,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     choosePet: '为哪只宠物分享？',
     createProfileFirst: '请先创建宠物回忆档案，再分享瞬间。',
     photo: '照片',
+    avatar: '头像',
+    banner: '档案横幅',
+    associatingPhotos: '正在保存照片...',
     caption: '文字',
     captionPlaceholder: '留下爱的记忆...',
     postFeeHint: '发布将立即上链：服务台销毁 1 PAW，只需少量 XEC 费用——无需等待挖矿。',

@@ -1,5 +1,6 @@
 import { useLocale } from '../i18n/LocaleContext.js';
 import type { IndexMemorialGroup } from '../lib/danaIndexApi.js';
+import { mediaUrl } from '../lib/socialApi.js';
 import {
   parseAnimalProfileNote,
   profileBareNameFromNote,
@@ -41,7 +42,11 @@ export function RecentFootprints(props: {
               onClick={() => props.onOpenPet(group.originalBurnTxid)}
             >
               <span className="footprint-avatar">
-                {speciesEmoji(fields?.species)}
+                {group.media?.avatar ? (
+                  <img src={mediaUrl(group.media.avatar)} alt="" loading="lazy" />
+                ) : (
+                  speciesEmoji(fields?.species)
+                )}
               </span>
               <span className="footprint-name">{name}</span>
               <span className="footprint-time">{relativeTime(createdMs)}</span>

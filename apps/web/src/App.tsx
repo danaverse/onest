@@ -22,6 +22,7 @@ import {
 } from './lib/danaIndexApi.js';
 import {
   fetchFeed,
+  flushPendingProfileMedia,
   type FeedPage,
   type FeedPost,
 } from './lib/socialApi.js';
@@ -60,6 +61,7 @@ export default function App() {
   useEffect(() => {
     loadFeed();
     loadPosts();
+    void flushPendingProfileMedia();
     checkUrlPath();
     const handlePopState = () => checkUrlPath();
     window.addEventListener('popstate', handlePopState);

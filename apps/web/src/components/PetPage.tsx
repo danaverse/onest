@@ -4,7 +4,7 @@ import {
   fetchMemorialDetails,
   type IndexMemorialGroup,
 } from '../lib/danaIndexApi.js';
-import { fetchPetPosts, type FeedPost } from '../lib/socialApi.js';
+import { fetchPetPosts, mediaUrl, type FeedPost } from '../lib/socialApi.js';
 import {
   parseAnimalProfileNote,
   profileBareNameFromNote,
@@ -86,26 +86,39 @@ export function PetPage(props: {
       {memorial && (
         <>
           <header className="pet-page-header">
-            <div className="pet-page-avatar">{speciesEmoji(species)}</div>
-            <div className="pet-page-info">
-              <h1>{name}</h1>
-              <div className="detail-meta">
-                {parsed?.breed && <span className="meta-tag">{parsed.breed}</span>}
-                {(parsed?.birthDate || parsed?.passingDate) && (
-                  <span className="meta-tag">
-                    {parsed.birthDate && parsed.passingDate
-                      ? `${parsed.birthDate} — ${parsed.passingDate}`
-                      : parsed.birthDate
-                        ? `Born ${parsed.birthDate}`
-                        : `Passed ${parsed.passingDate}`}
-                  </span>
-                )}
-                {parsed?.location && <span className="meta-tag">📍 {parsed.location}</span>}
-                <span className="meta-tag paw-tag">
-                  🐾 {memorial.totalBurns} tribute{memorial.totalBurns > 1 ? 's' : ''}
-                </span>
+            {memorial.media?.banner && (
+              <div className="pet-page-banner">
+                <img src={mediaUrl(memorial.media.banner)} alt="" loading="lazy" />
               </div>
-              {parsed?.note && <p className="pet-page-story">{parsed.note}</p>}
+            )}
+            <div className="pet-page-headline">
+              <div className="pet-page-avatar">
+                {memorial.media?.avatar ? (
+                  <img src={mediaUrl(memorial.media.avatar)} alt="" loading="lazy" />
+                ) : (
+                  speciesEmoji(species)
+                )}
+              </div>
+              <div className="pet-page-info">
+                <h1>{name}</h1>
+                <div className="detail-meta">
+                  {parsed?.breed && <span className="meta-tag">{parsed.breed}</span>}
+                  {(parsed?.birthDate || parsed?.passingDate) && (
+                    <span className="meta-tag">
+                      {parsed.birthDate && parsed.passingDate
+                        ? `${parsed.birthDate} — ${parsed.passingDate}`
+                        : parsed.birthDate
+                          ? `Born ${parsed.birthDate}`
+                          : `Passed ${parsed.passingDate}`}
+                    </span>
+                  )}
+                  {parsed?.location && <span className="meta-tag">📍 {parsed.location}</span>}
+                  <span className="meta-tag paw-tag">
+                    🐾 {memorial.totalBurns} tribute{memorial.totalBurns > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {parsed?.note && <p className="pet-page-story">{parsed.note}</p>}
+              </div>
             </div>
           </header>
 
