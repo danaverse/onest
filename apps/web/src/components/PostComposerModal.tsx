@@ -12,6 +12,7 @@ import {
   createPostWithPaw,
   fetchPostFee,
   MIN_POST_PAW_XEC_SATS,
+  OTHER_PET_POST_PAW_ATOMS,
 } from '../lib/paidPost.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { speciesEmoji } from '../lib/petUi.js';
@@ -24,6 +25,8 @@ export interface PetOption {
   avatar?: string | null;
   /** True when this install/wallet created the pet profile. */
   isOwn?: boolean;
+  /** Creator wallet of the pet root (receives the other-pet post reward). */
+  creatorAddress?: string | null;
 }
 
 export function PostComposerModal(props: {
@@ -81,9 +84,14 @@ export function PostComposerModal(props: {
   const pawAtoms = userWallet.balances?.pawAtoms ?? 0n;
   const selectedPet = props.pets.find(p => p.txid === petTxid);
   const isOwnPet = selectedPet?.isOwn === true;
+  const creatorAddress = selectedPet?.creatorAddress ?? null;
   const canPayXec = postFeeSats != null && xecSats >= postFeeSats + 500n;
-  /** Other pets need payment: prefer burning 1 PAW when the wallet holds it. */
-  const usePaw = !isOwnPet && pawAtoms >= 1n && xecSats >= MIN_POST_PAW_XEC_SATS;
+  /** Other pets: 1 PAW stamp burned + 1 PAW sent to the creator. */
+  const usePaw =
+    !isOwnPet &&
+    !!creatorAddress &&
+    pawAtoms >= OTHER_PET_POST_PAW_ATOMS &&
+    xecSats >= MIN_POST_PAW_XEC_SATS;
   /** Desk-sponsored posts are only for the user's own pets. */
   const sponsoredAvailable =
     userWallet.status === 'unlocked' && isOwnPet && postFeeSats != null && !canPayXec;
@@ -153,6 +161,7 @@ export function PostComposerModal(props: {
               await createPostWithPaw({
                 wallet: userWallet.wallet,
                 contentHash: created.contentHash,
+                creatorAddress: creatorAddress ?? undefined,
                 onProgress: setProgress,
               })
             ).burnTxid

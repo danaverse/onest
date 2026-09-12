@@ -11,7 +11,7 @@ Device PoW challenge/submit desk with fee-sponsored remint and DANA animal memor
 - `POST /api/challenge` — Request PoW challenge `{ installId, kind?, note?, parentBurnTxid?, contentHash?, postHash?, direction?, targetType?, creatorAddress? }`
   - `kind: 'memorial'` (default) — v1/v2 tribute note (requires `parentBurnTxid`)
   - `kind: 'profile'` — first sponsored pet profile only (once per install); requires an encoded profile `note` and accepts `creatorAddress` to stamp the v5 creator hash. The desk burns 6 atoms after the ~2 minute wait
-  - `kind: 'post'` — requires `contentHash` and `petRootTxid` (64 hex each); desk-sponsored **only for the install's own pets** (1 atom, ~1 minute wait). Posts on other pets need the wallet PAW burn (1 atom) or the flat XEC stamp fee
+  - `kind: 'post'` — requires `contentHash` and `petRootTxid` (64 hex each); desk-sponsored **only for the install's own pets** (1 atom, ~1 minute wait). Posts on other pets need a 2 PAW wallet burn (1 stamp + 1 to the creator) or the flat XEC stamp fee (desk burns 1 PAW and rewards the creator 1 PAW)
   - `kind: 'vote'` — requires `postHash` (64 hex); `direction` 1 up / 0 down (default up)
 - `POST /api/submit` — Submit solved challenge `{ installId, challengeId, nonceHex, powMs?, powAttempts? }` (returns `waitUntil` + per-kind `minPraySeconds`)
 - `POST /api/burn` — Execute memorial / profile / post / vote burn after soft pray `{ installId, remintTxid, burnToken }`

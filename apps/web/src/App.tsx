@@ -163,17 +163,21 @@ export default function App() {
       g.burns.find(
         b => b.burnTxid.toLowerCase() === g.originalBurnTxid.toLowerCase(),
       ) ?? g.burns[0];
+    const creatorOf = (burn: IndexBurn | undefined): string | null =>
+      (burn?.creatorAddress || burn?.senderAddress || '').toLowerCase() || null;
     const byRoot = new Map<string, PetOption>();
     /* Newest profiles first: they carry name, species and artwork. */
     for (const g of recentProfiles) {
       const root = g.originalBurnTxid.toLowerCase();
       const fields = parseAnimalProfileNote(g.originalNote);
+      const rootBurn = rootBurnOf(g);
       byRoot.set(root, {
         txid: root,
         name: profileBareNameFromNote(g.originalNote) || `Pet ${root.slice(0, 8)}…`,
         species: fields?.species || '',
         avatar: g.media?.avatar ?? null,
-        isOwn: owns(rootBurnOf(g)),
+        isOwn: owns(rootBurn),
+        creatorAddress: creatorOf(rootBurn),
       });
     }
     for (const b of recent) {
@@ -185,11 +189,13 @@ export default function App() {
         species: prev?.species || parseAnimalProfileNote(b.note)?.species || '',
         avatar: prev?.avatar ?? b.media?.avatar ?? null,
         isOwn: prev?.isOwn ?? owns(b),
+        creatorAddress: prev?.creatorAddress ?? creatorOf(b),
       });
     }
     for (const g of trending) {
       const root = g.originalBurnTxid.toLowerCase();
       const prev = byRoot.get(root);
+      const rootBurn = rootBurnOf(g);
       byRoot.set(root, {
         txid: root,
         name:
@@ -198,7 +204,8 @@ export default function App() {
           `Pet ${root.slice(0, 8)}…`,
         species: prev?.species || parseAnimalProfileNote(g.originalNote)?.species || '',
         avatar: prev?.avatar ?? g.media?.avatar ?? null,
-        isOwn: prev?.isOwn ?? owns(rootBurnOf(g)),
+        isOwn: prev?.isOwn ?? owns(rootBurn),
+        creatorAddress: prev?.creatorAddress ?? creatorOf(rootBurn),
       });
     }
     return [...byRoot.values()];

@@ -61,16 +61,26 @@ export async function fetchPostFee(): Promise<PostFeeInfo> {
   return res.json();
 }
 
+/** Atoms a wallet PAW post spends on another pet: 1 stamp + 1 for the creator. */
+export const OTHER_PET_POST_PAW_ATOMS = 2n;
+
 /**
  * Wallet PAW path for pets you do not own: burn 1 atom with the DANA v4
- * content hash from your own wallet. No desk fee; XEC only covers the tx.
+ * content hash and send 1 atom to the pet creator, all from your wallet.
+ * No desk fee; XEC only covers the tx.
  */
 export async function createPostWithPaw(opts: {
   wallet: Wallet;
   contentHash: string;
+  /** Required for other-pet posts: receives the 1-atom creator reward. */
+  creatorAddress?: string;
   onProgress?: (message: string) => void;
 }): Promise<{ burnTxid: string }> {
-  opts.onProgress?.('Burning 1 PAW for this moment...');
+  opts.onProgress?.(
+    opts.creatorAddress
+      ? 'Burning 1 PAW and rewarding the creator 1 PAW...'
+      : 'Burning 1 PAW for this moment...',
+  );
   // Lazy: keeps ecash-lib/wasm out of the main bundle.
   const { burnOnePaw } = await import('../../../../src/offering/burnPaw.js');
   const { encodePostStampPushdata } = await import(
@@ -81,6 +91,9 @@ export async function createPostWithPaw(opts: {
     tokenId: PAW_TOKEN_ID,
     pushdata: encodePostStampPushdata(opts.contentHash),
     burnAtoms: 1n,
+    ...(opts.creatorAddress
+      ? { feeAtoms: 1n, feeAddress: opts.creatorAddress }
+      : {}),
     autoSelectUtxos: true,
   });
   notifyBurn(result.txid);
