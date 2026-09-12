@@ -20,6 +20,7 @@ import {
   type IndexBurn,
   type IndexMemorialGroup,
 } from './lib/danaIndexApi.js';
+import { getOrCreateInstallId } from './lib/config.js';
 import {
   fetchFeed,
   flushPendingProfileMedia,
@@ -31,11 +32,14 @@ import {
   profileBareNameFromNote,
 } from '../../../src/offering/animalProfileFields.js';
 import { speciesEmoji } from './lib/petUi.js';
+import { useWallet } from './wallet/WalletContext.js';
 
 const FEED_PAGE_SIZE = 12;
 
 export default function App() {
   const { t } = useLocale();
+  const { address: walletAddress } = useWallet();
+  const installId = useMemo(() => getOrCreateInstallId(), []);
   const [route, setRoute] = useState<{ name: 'home' } | { name: 'pet'; txid: string }>({
     name: 'home',
   });
@@ -145,6 +149,20 @@ export default function App() {
   }
 
   const pets: PetOption[] = useMemo(() => {
+    const owns = (burn: IndexBurn | undefined): boolean => {
+      if (!burn) return false;
+      if (burn.creatorInstallId && burn.creatorInstallId === installId) return true;
+      if (!walletAddress) return false;
+      const addr = walletAddress.toLowerCase();
+      return (
+        (burn.creatorAddress || '').toLowerCase() === addr ||
+        (burn.senderAddress || '').toLowerCase() === addr
+      );
+    };
+    const rootBurnOf = (g: IndexMemorialGroup): IndexBurn | undefined =>
+      g.burns.find(
+        b => b.burnTxid.toLowerCase() === g.originalBurnTxid.toLowerCase(),
+      ) ?? g.burns[0];
     const byRoot = new Map<string, PetOption>();
     /* Newest profiles first: they carry name, species and artwork. */
     for (const g of recentProfiles) {
@@ -155,6 +173,7 @@ export default function App() {
         name: profileBareNameFromNote(g.originalNote) || `Pet ${root.slice(0, 8)}…`,
         species: fields?.species || '',
         avatar: g.media?.avatar ?? null,
+        isOwn: owns(rootBurnOf(g)),
       });
     }
     for (const b of recent) {
@@ -165,6 +184,7 @@ export default function App() {
         name: prev?.name || profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`,
         species: prev?.species || parseAnimalProfileNote(b.note)?.species || '',
         avatar: prev?.avatar ?? b.media?.avatar ?? null,
+        isOwn: prev?.isOwn ?? owns(b),
       });
     }
     for (const g of trending) {
@@ -178,10 +198,11 @@ export default function App() {
           `Pet ${root.slice(0, 8)}…`,
         species: prev?.species || parseAnimalProfileNote(g.originalNote)?.species || '',
         avatar: prev?.avatar ?? g.media?.avatar ?? null,
+        isOwn: prev?.isOwn ?? owns(rootBurnOf(g)),
       });
     }
     return [...byRoot.values()];
-  }, [recent, trending, recentProfiles]);
+  }, [recent, trending, recentProfiles, installId, walletAddress]);
 
   const petNameByRoot = useMemo(() => {
     const map = new Map<string, string>();

@@ -3,9 +3,17 @@
  * content hash. No PoW, no wait. A retry reuses the pending payment.
  */
 import type { Wallet } from 'ecash-wallet';
-import { MINT_API_BASE, getOrCreateInstallId } from './config.js';
+import {
+  MINT_API_BASE,
+  PAW_TOKEN_ID,
+  getOrCreateInstallId,
+} from './config.js';
+import { notifyBurn } from './profileCreation.js';
 
 const PENDING_PAYMENT_KEY = 'onest.pendingPostPayment';
+
+/** Wallet PAW path: the burn tx only needs a small XEC postage/fee reserve. */
+export const MIN_POST_PAW_XEC_SATS = 1_000n;
 
 interface WalletUtxoLike {
   sats: bigint;
@@ -51,6 +59,33 @@ export async function fetchPostFee(): Promise<PostFeeInfo> {
   const res = await fetch(`${MINT_API_BASE}/api/post/fee`);
   if (!res.ok) throw new Error(`Post fee HTTP ${res.status}`);
   return res.json();
+}
+
+/**
+ * Wallet PAW path for pets you do not own: burn 1 atom with the DANA v4
+ * content hash from your own wallet. No desk fee; XEC only covers the tx.
+ */
+export async function createPostWithPaw(opts: {
+  wallet: Wallet;
+  contentHash: string;
+  onProgress?: (message: string) => void;
+}): Promise<{ burnTxid: string }> {
+  opts.onProgress?.('Burning 1 PAW for this moment...');
+  // Lazy: keeps ecash-lib/wasm out of the main bundle.
+  const { burnOnePaw } = await import('../../../../src/offering/burnPaw.js');
+  const { encodePostStampPushdata } = await import(
+    '../../../../src/social/danaSocial.js'
+  );
+  const result = await burnOnePaw({
+    wallet: opts.wallet,
+    tokenId: PAW_TOKEN_ID,
+    pushdata: encodePostStampPushdata(opts.contentHash),
+    burnAtoms: 1n,
+    autoSelectUtxos: true,
+  });
+  notifyBurn(result.txid);
+  await opts.wallet.sync().catch(() => undefined);
+  return { burnTxid: result.txid };
 }
 
 export async function createPaidPostWithXec(opts: {

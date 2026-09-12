@@ -96,6 +96,7 @@ export async function fetchChallenge(opts: {
   direction?: 0 | 1;
   targetType?: number;
   creatorAddress?: string;
+  petRootTxid?: string;
 }): Promise<ChallengeOk> {
   const installId = getOrCreateInstallId();
   const res = await fetch(`${MINT_API_BASE}/api/challenge`, {
@@ -111,6 +112,7 @@ export async function fetchChallenge(opts: {
       direction: opts.direction,
       targetType: opts.targetType,
       creatorAddress: opts.creatorAddress,
+      petRootTxid: opts.petRootTxid,
     }),
   });
   if (!res.ok) {

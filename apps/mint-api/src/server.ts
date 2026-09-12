@@ -254,6 +254,8 @@ const server = createServer(async (req, res) => {
         targetType: body.targetType,
         creatorAddress:
           typeof body.creatorAddress === 'string' ? body.creatorAddress : undefined,
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, challenge);
       return;
