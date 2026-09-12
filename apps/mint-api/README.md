@@ -21,7 +21,7 @@ Device PoW challenge/submit desk with fee-sponsored remint and DANA animal memor
 - `GET /api/listing-fee` — Quote for wallet-paid burns `{ tokenId, atoms (default 6), feeAddress }`; the user's wallet burns 6 PAW (rebirth), sends the fee and pays XEC, then broadcasts directly (no wait)
 - `GET /api/profile/fee` — Flat XEC fee for a desk-built profile `{ xec, xecSats, address }` (`MINT_PROFILE_XEC_FEE`, default 20 XEC = 2,000 sats)
 - `GET /api/post/fee` — Same fee quote for paid post stamps
-- `POST /api/post/create` — `{ installId, address, paymentTxid, contentHash }`: verifies the payment and burns 1 PAW with the DANA v4 content hash. No PoW, no wait; only casual voting still uses the sponsored PoW challenge.
+- `POST /api/post/create` — `{ installId, address, paymentTxid, contentHash, petRootTxid }`: verifies the payment and burns 1 PAW with the DANA v4 content hash. On another user's pet the desk also sends **1 PAW atom to the creator** (2 atoms total) from the same flat fee. No PoW, no wait; only casual voting still uses the sponsored PoW challenge.
 - `POST /api/profile/create` — `{ installId, address, paymentTxid, note, parentBurnTxid? }`: verifies the on-chain payment (paid to the desk from the creator's address, not reused) and spends 12 PAW from desk inventory — 6 atoms burned for rebirth, 6 atoms listing fee retained — to anchor the profile. No remint, no PoW, no wait.
 
 **Paid profiles (no PAW)**: the user pays a flat XEC fee (default 20 XEC = 2,000 sats). Desk cost: 12 PAW atoms at the 1 XEC/atom reference (~1,200 sats) + ~300–600 sats burn-tx fee → margin ≈ **200–500 sats (~10–25%)**. Sponsored votes keep minting fresh (108 per remint), which maintains inventory.

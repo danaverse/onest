@@ -137,6 +137,8 @@ const server = createServer(async (req, res) => {
         address: String(body.address || ''),
         paymentTxid: String(body.paymentTxid || ''),
         contentHash: String(body.contentHash || ''),
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, result);
       return;

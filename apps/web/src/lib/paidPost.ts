@@ -91,6 +91,8 @@ export async function createPostWithPaw(opts: {
 export async function createPaidPostWithXec(opts: {
   wallet: Wallet;
   contentHash: string;
+  /** Pet the post belongs to; other-pet posts also reward the creator. */
+  petRootTxid?: string;
   onProgress?: (message: string) => void;
 }): Promise<{ burnTxid: string }> {
   const installId = getOrCreateInstallId();
@@ -131,13 +133,14 @@ export async function createPaidPostWithXec(opts: {
       address: wallet.address,
       paymentTxid,
       contentHash: opts.contentHash,
+      petRootTxid: opts.petRootTxid,
     }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const message =
       (err as { error?: string }).error || `Post create HTTP ${res.status}`;
-    const transient = /still propagating/i.test(message);
+    const transient = /still propagating|try again shortly/i.test(message);
     const alreadyUsed = /already been used/i.test(message);
     if (!transient) clearPendingPayment();
     throw new Error(

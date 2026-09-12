@@ -182,7 +182,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'No XEC for the stamp? The desk can sponsor this post after a short wait.',
     postPawButton: 'Burn 1 PAW & post',
     postOtherPetHint:
-      'Posting on another pet burns 1 PAW — or pay the XEC stamp fee.',
+      'Posting on another pet burns 1 PAW — or pay the XEC fee: the desk burns 1 PAW and sends 1 PAW to the creator.',
     postNeedPawOrXec: 'Posting on other pets needs XEC or 1 PAW.',
     cancel: 'Cancel',
     posting: 'Stamping...',
@@ -327,7 +327,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Chưa đủ XEC để đóng dấu? Nhà bàn tài trợ 1 PAW sau ít phút chờ.',
     postPawButton: 'Đốt 1 PAW & đăng',
     postOtherPetHint:
-      'Đăng lên thú cưng của người khác cần đốt 1 PAW — hoặc trả phí dấu bằng XEC.',
+      'Đăng lên thú cưng của người khác cần đốt 1 PAW — hoặc trả phí XEC: nhà bàn đốt 1 PAW và gửi 1 PAW cho chủ hồ sơ.',
     postNeedPawOrXec: 'Đăng lên thú cưng khác cần XEC hoặc 1 PAW.',
     cancel: 'Huỷ',
     posting: 'Đang in dấu...',
@@ -469,7 +469,7 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     sponsoredPostButton: '免费发布 — 约 1 分钟',
     sponsoredPostHint: 'XEC 不足？服务台可赞助本次发布，需短暂等待。',
     postPawButton: '销毁 1 PAW 并发布',
-    postOtherPetHint: '在他人宠物下发布需销毁 1 PAW——或支付 XEC 印记费用。',
+    postOtherPetHint: '在他人宠物下发布需销毁 1 PAW——或支付 XEC 费用：服务台销毁 1 PAW，并向创作者发送 1 PAW。',
     postNeedPawOrXec: '在他人宠物下发布需要 XEC 或 1 PAW。',
     cancel: '取消',
     posting: '正在印下...',

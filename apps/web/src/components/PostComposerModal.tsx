@@ -160,6 +160,7 @@ export function PostComposerModal(props: {
               await createPaidPostWithXec({
                 wallet: userWallet.wallet,
                 contentHash: created.contentHash,
+                petRootTxid: petTxid,
                 onProgress: setProgress,
               })
             ).burnTxid;
