@@ -751,6 +751,11 @@ body {
   overflow-y: auto;
 }
 
+.profile-modal {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 .detail-title-row {
   display: flex;
   align-items: center;
