@@ -179,7 +179,11 @@ async function postProfileMedia(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ installId, ...links }),
+      body: JSON.stringify({
+        installId,
+        ...(links.avatar !== undefined ? { avatarSha256: links.avatar } : {}),
+        ...(links.banner !== undefined ? { bannerSha256: links.banner } : {}),
+      }),
     },
   );
   if (!res.ok) throw await errorFrom(res, 'Profile media');
@@ -251,21 +255,24 @@ export function queueProfileMedia(item: PendingProfileMedia): void {
 }
 
 /** Retry artwork links that were queued when the index was slow. */
-export async function flushPendingProfileMedia(): Promise<void> {
+export async function flushPendingProfileMedia(): Promise<number> {
   const items = readPendingProfileMedia();
-  if (items.length === 0) return;
+  if (items.length === 0) return 0;
   const remaining: PendingProfileMedia[] = [];
+  let linked = 0;
   for (const item of items) {
     try {
       await postProfileMedia(item.txid, {
         ...(item.avatar !== undefined ? { avatar: item.avatar } : {}),
         ...(item.banner !== undefined ? { banner: item.banner } : {}),
       });
+      linked++;
     } catch {
       remaining.push(item);
     }
   }
   writePendingProfileMedia(remaining);
+  return linked;
 }
 
 export async function createPost(input: {
