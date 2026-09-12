@@ -5,6 +5,7 @@ import {
   type IndexMemorialGroup,
 } from '../lib/danaIndexApi.js';
 import { fetchPetPosts, mediaUrl, type FeedPost } from '../lib/socialApi.js';
+import { profileShareUrl } from '../lib/shareLink.js';
 import {
   parseAnimalProfileNote,
   profileBareNameFromNote,
@@ -20,7 +21,7 @@ export function PetPage(props: {
   onOpenPost: (postId: string) => void;
   onPetPostsChanged?: () => void;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [memorial, setMemorial] = useState<IndexMemorialGroup | null>(null);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [tab, setTab] = useState<'posts' | 'tributes'>('posts');
@@ -65,7 +66,7 @@ export function PetPage(props: {
     if (!memorial) return;
     try {
       await navigator.clipboard.writeText(
-        `${window.location.origin}/${memorial.originalBurnTxid}`,
+        profileShareUrl(memorial.originalBurnTxid, undefined, locale),
       );
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
