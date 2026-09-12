@@ -22,7 +22,7 @@ export function assertDeskTokenId(tokenId: string): void {
   }
   if (tokenId.toLowerCase() === WLOTUS_TOKEN_ID) {
     throw new Error(
-      'TOKEN_ID is the live WLotus token. Onest must use tPAW (test) or PAW (prod). Set TEST_DESK_SEEDS and run scripts/provision-test-tpaw.sh.',
+      'TOKEN_ID is the live WLotus token. Onest must use tPAW (test) or PAW (prod). Set TEST_DESK_SEEDS and run scripts/provision-test-tpaw.sh, or PROD_DESK_SEEDS and run scripts/provision-prod-paw.sh.',
     );
   }
 }
