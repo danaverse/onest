@@ -289,7 +289,7 @@ export function AnimalProfileModal(props: {
 
   return (
     <div className="modal-backdrop" onClick={busy ? undefined : handleClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div className="modal-content profile-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{successTxid ? t('tributeSuccess') : props.parentBurnTxid ? t('pawTribute') : t('newProfile')}</h2>
           {!busy && <button type="button" className="btn-close" onClick={handleClose}>&times;</button>}
