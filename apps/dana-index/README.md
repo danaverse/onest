@@ -26,6 +26,8 @@ Social feed:
 - `GET /api/feed/trending?limit=20` — Atom-weighted gravity ranking
 - `GET /api/posts/:id` — Post + comments
 - `GET /api/pets/:txid/posts` — Verified posts for a pet root
+- `GET /api/pets/:txid/media` — Off-chain avatar/banner keys for a pet root
+- `POST /api/pets/:txid/media { installId, avatarSha256?, bannerSha256? }` — Link uploaded media to a profile you created
 - `PUT /api/media/:sha256?installId=` — Raw image upload (jpeg/png/webp, ≤2 MiB); key must equal sha256(bytes)
 - `GET /media/:sha256` — Immutable-cache media bytes
 - `POST /api/posts { installId, petRootTxid, caption, mediaHashes, createdAt }` — Create hosted post (pending until its DANA v4 stamp is indexed)

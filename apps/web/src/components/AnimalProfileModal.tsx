@@ -11,6 +11,13 @@ import {
   fetchProfileFee,
   type ProfileFeeInfo,
 } from '../lib/paidProfile.js';
+import {
+  associateProfileMedia,
+  compressAvatar,
+  compressBanner,
+  queueProfileMedia,
+  uploadImage,
+} from '../lib/socialApi.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { setOfferingBlocksPwaReload } from '../lib/pwaReloadGate.js';
 import { useWallet } from '../wallet/WalletContext.js';
@@ -41,6 +48,18 @@ export function AnimalProfileModal(props: {
   const [err, setErr] = useState<string | null>(null);
   const [successTxid, setSuccessTxid] = useState<string | null>(null);
   const [profileFee, setProfileFee] = useState<ProfileFeeInfo | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+      if (bannerPreview) URL.revokeObjectURL(bannerPreview);
+    },
+    [avatarPreview, bannerPreview],
+  );
 
   useEffect(() => {
     if (!props.open || props.parentBurnTxid) return;
@@ -96,6 +115,54 @@ export function AnimalProfileModal(props: {
     setErr(null);
     setProgress(null);
     setSuccessTxid(null);
+    setAvatarFile(null);
+    setBannerFile(null);
+    setAvatarPreview(null);
+    setBannerPreview(null);
+  }
+
+  function pickArtwork(kind: 'avatar' | 'banner', file: File | null) {
+    const url = file ? URL.createObjectURL(file) : null;
+    if (kind === 'avatar') {
+      setAvatarFile(file);
+      setAvatarPreview(url);
+    } else {
+      setBannerFile(file);
+      setBannerPreview(url);
+    }
+  }
+
+  /** Upload chosen artwork before the on-chain profile is created. */
+  async function uploadArtwork(): Promise<{
+    avatar?: string | null;
+    banner?: string | null;
+  }> {
+    const links: { avatar?: string | null; banner?: string | null } = {};
+    if (avatarFile) {
+      setProgress(t('uploadingPhotos'));
+      const { blob } = await compressAvatar(avatarFile);
+      links.avatar = (await uploadImage(blob)).sha256;
+    }
+    if (bannerFile) {
+      setProgress(t('uploadingPhotos'));
+      const { blob } = await compressBanner(bannerFile);
+      links.banner = (await uploadImage(blob)).sha256;
+    }
+    return links;
+  }
+
+  /** Link uploaded artwork to the new root; queue for retry when slow. */
+  async function linkArtwork(
+    txid: string,
+    links: { avatar?: string | null; banner?: string | null },
+  ) {
+    if (links.avatar === undefined && links.banner === undefined) return;
+    setProgress(t('associatingPhotos'));
+    try {
+      await associateProfileMedia(txid, links);
+    } catch {
+      queueProfileMedia({ txid, ...links });
+    }
   }
 
   function handleClose() {
@@ -149,11 +216,13 @@ export function AnimalProfileModal(props: {
     setSuccessTxid(null);
     setOfferingBlocksPwaReload(true);
     try {
+      const links = await uploadArtwork();
       setProgress(t('creatingProfileWallet'));
       const { txid } = await createPetProfileWithWallet({
         wallet: userWallet.wallet,
         fields: buildProfileFields(),
       });
+      await linkArtwork(txid, links);
       setSuccessTxid(txid);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error creating profile');
@@ -176,12 +245,14 @@ export function AnimalProfileModal(props: {
     setProgress(null);
     setOfferingBlocksPwaReload(true);
     try {
+      const links = await uploadArtwork();
       const note = encodeAnimalProfileNote(buildProfileFields());
       const { burnTxid } = await createPaidProfileWithXec({
         wallet: userWallet.wallet,
         note,
         onProgress: setProgress,
       });
+      await linkArtwork(burnTxid, links);
       setSuccessTxid(burnTxid);
       await userWallet.refresh();
     } catch (e) {
@@ -312,6 +383,40 @@ export function AnimalProfileModal(props: {
                       placeholder="YYYY-MM-DD"
                     />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('avatar')}</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={e => pickArtwork('avatar', e.target.files?.[0] ?? null)}
+                  />
+                  {avatarPreview && (
+                    <img
+                      className="artwork-preview artwork-preview--avatar"
+                      src={avatarPreview}
+                      alt=""
+                    />
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label>{t('banner')}</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={e => pickArtwork('banner', e.target.files?.[0] ?? null)}
+                  />
+                  {bannerPreview && (
+                    <img
+                      className="artwork-preview artwork-preview--banner"
+                      src={bannerPreview}
+                      alt=""
+                    />
+                  )}
                 </div>
               </>
             ) : (

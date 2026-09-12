@@ -15,6 +15,8 @@
  *   GET  /api/feed/trending?limit=
  *   GET  /api/posts/:id
  *   GET  /api/pets/:txid/posts
+ *   GET  /api/pets/:txid/media
+ *   POST /api/pets/:txid/media { installId, avatarSha256?, bannerSha256? }
  *   PUT  /api/media/:sha256?installId=
  *   GET  /media/:sha256
  *   POST /api/posts
@@ -280,7 +282,11 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && normPath === '/api/profiles/recent') {
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 12)));
-      json(res, 200, { ok: true, profiles: store.recentProfiles(limit) });
+      const profiles = store.recentProfiles(limit).map(g => ({
+        ...g,
+        media: social.getProfileMedia(g.originalBurnTxid),
+      }));
+      json(res, 200, { ok: true, profiles });
       return;
     }
 
@@ -301,7 +307,11 @@ const server = createServer(async (req, res) => {
         json(res, 404, { error: 'memory not found' });
         return;
       }
-      json(res, 200, { ok: true, memory: group, memorial: group });
+      const memory = {
+        ...group,
+        media: social.getProfileMedia(group.originalBurnTxid),
+      };
+      json(res, 200, { ok: true, memory, memorial: memory });
       return;
     }
 
@@ -412,10 +422,70 @@ const server = createServer(async (req, res) => {
         txid: g.originalBurnTxid,
         name: profileBareNameFromNote(g.originalNote) || 'Beloved pet',
         species: parseAnimalProfileNote(g.originalNote)?.species || '',
+        avatar: social.getProfileMedia(g.originalBurnTxid)?.avatar ?? null,
         tributes: g.totalBurns,
         at: g.at,
       }));
       json(res, 200, { ok: true, pets });
+      return;
+    }
+
+    const petMediaMatch = normPath.match(/^\/api\/pets\/([0-9a-fA-F]{64})\/media$/);
+    if (petMediaMatch && req.method === 'GET') {
+      json(res, 200, {
+        ok: true,
+        media: social.getProfileMedia(petMediaMatch[1]!.toLowerCase()),
+      });
+      return;
+    }
+
+    if (petMediaMatch && req.method === 'POST') {
+      const rootTxid = petMediaMatch[1]!.toLowerCase();
+      const body = await readJsonBody(req);
+      const installId = requireInstallId(body.installId);
+      writesPerIpPerMin.consume(normalizeClientIp(clientIp(req)));
+
+      const root = store.get(rootTxid);
+      if (!root || root.originalBurnTxid.toLowerCase() !== rootTxid) {
+        /* The burn is probably still propagating; the client retries. */
+        json(res, 404, { error: 'profile not indexed yet' });
+        return;
+      }
+      const user = social.getUser(installId);
+      const bound = user?.address?.toLowerCase() || '';
+      const isOwner =
+        root.creatorInstallId === installId ||
+        (bound !== '' &&
+          (root.creatorAddress?.toLowerCase() === bound ||
+            root.senderAddress?.toLowerCase() === bound));
+      if (!isOwner) {
+        json(res, 403, { error: 'not the profile owner' });
+        return;
+      }
+
+      const readImageHash = (raw: unknown): string | null | undefined => {
+        if (raw === undefined) return undefined;
+        if (raw === null || raw === '') return null;
+        const sha = String(raw).trim().toLowerCase();
+        if (!isHex64(sha)) throw new BadRequestError('valid sha256 required');
+        const meta = social.getMedia(sha);
+        if (!meta || !/^image\//.test(meta.mime)) {
+          throw new BadRequestError(`image not uploaded: ${sha}`);
+        }
+        return sha;
+      };
+      const avatarSha256 = readImageHash(body.avatarSha256);
+      const bannerSha256 = readImageHash(body.bannerSha256);
+      if (avatarSha256 === undefined && bannerSha256 === undefined) {
+        json(res, 400, { error: 'avatarSha256 or bannerSha256 required' });
+        return;
+      }
+      const media = social.setProfileMedia({
+        petRootTxid: rootTxid,
+        avatarSha256,
+        bannerSha256,
+      });
+      json(res, 200, { ok: true, media });
       return;
     }
 

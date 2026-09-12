@@ -18,6 +18,12 @@ export interface PetInfo {
   species: string;
 }
 
+/** Off-chain avatar/banner keys for a pet profile root. */
+export interface ProfileMediaLinks {
+  avatar: string | null;
+  banner: string | null;
+}
+
 export interface FeedPost {
   id: string;
   petRootTxid: string;
@@ -76,23 +82,35 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /** Downscale + recompress photos client-side; falls back to the original. */
-export async function compressImage(
+async function redrawImage(
   file: File,
+  opts: { maxDim: number; square?: boolean },
 ): Promise<{ blob: Blob; mime: string }> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
     throw new Error('Please choose a JPEG, PNG or WebP image');
   }
   try {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_IMAGE_DIM / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    let sx = 0;
+    let sy = 0;
+    let sw = bitmap.width;
+    let sh = bitmap.height;
+    if (opts.square) {
+      const side = Math.min(bitmap.width, bitmap.height);
+      sx = Math.round((bitmap.width - side) / 2);
+      sy = Math.round((bitmap.height - side) / 2);
+      sw = side;
+      sh = side;
+    }
+    const scale = Math.min(1, opts.maxDim / Math.max(sw, sh));
+    const width = Math.max(1, Math.round(sw * scale));
+    const height = Math.max(1, Math.round(sh * scale));
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return { blob: file, mime: file.type };
-    ctx.drawImage(bitmap, 0, 0, width, height);
+    ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, width, height);
     bitmap.close?.();
     const blob = await new Promise<Blob | null>(resolve =>
       canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
@@ -105,6 +123,21 @@ export async function compressImage(
   } catch {
     return { blob: file, mime: file.type };
   }
+}
+
+/** Downscale + recompress photos client-side; falls back to the original. */
+export function compressImage(file: File): Promise<{ blob: Blob; mime: string }> {
+  return redrawImage(file, { maxDim: MAX_IMAGE_DIM });
+}
+
+/** Square center-crop, for profile avatars. */
+export function compressAvatar(file: File): Promise<{ blob: Blob; mime: string }> {
+  return redrawImage(file, { maxDim: 512, square: true });
+}
+
+/** Wide artwork, for profile banners. */
+export function compressBanner(file: File): Promise<{ blob: Blob; mime: string }> {
+  return redrawImage(file, { maxDim: 1600 });
 }
 
 export async function uploadImage(
@@ -123,6 +156,116 @@ export async function uploadImage(
   );
   if (!res.ok) throw await errorFrom(res, 'Upload');
   return res.json();
+}
+
+export async function fetchProfileMedia(
+  petRootTxid: string,
+): Promise<ProfileMediaLinks | null> {
+  const res = await fetch(
+    `${apiBase()}/api/pets/${encodeURIComponent(petRootTxid)}/media`,
+  );
+  if (!res.ok) throw await errorFrom(res, 'Profile media');
+  const data = await res.json();
+  return data.media ?? null;
+}
+
+async function postProfileMedia(
+  petRootTxid: string,
+  links: { avatar?: string | null; banner?: string | null },
+): Promise<ProfileMediaLinks> {
+  const installId = getOrCreateInstallId();
+  const res = await fetch(
+    `${apiBase()}/api/pets/${encodeURIComponent(petRootTxid)}/media`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installId, ...links }),
+    },
+  );
+  if (!res.ok) throw await errorFrom(res, 'Profile media');
+  const data = await res.json();
+  return data.media as ProfileMediaLinks;
+}
+
+/**
+ * Link uploaded artwork to a freshly created profile. The burn may still be
+ * propagating, so retry 404/403 for a while before giving up.
+ */
+export async function associateProfileMedia(
+  petRootTxid: string,
+  links: { avatar?: string | null; banner?: string | null },
+  opts?: { attempts?: number; intervalMs?: number },
+): Promise<ProfileMediaLinks> {
+  const attempts = opts?.attempts ?? 12;
+  const intervalMs = opts?.intervalMs ?? 2_500;
+  let lastError: unknown = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await postProfileMedia(petRootTxid, links);
+    } catch (e) {
+      lastError = e;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, intervalMs));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Profile media failed');
+}
+
+const PENDING_PROFILE_MEDIA_KEY = 'onest.pendingProfileMedia';
+
+export interface PendingProfileMedia {
+  txid: string;
+  avatar?: string | null;
+  banner?: string | null;
+}
+
+function readPendingProfileMedia(): PendingProfileMedia[] {
+  try {
+    const raw = localStorage.getItem(PENDING_PROFILE_MEDIA_KEY)?.trim() || '';
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PendingProfileMedia[];
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          p => p && /^[0-9a-f]{64}$/i.test(String(p.txid || '')),
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingProfileMedia(items: PendingProfileMedia[]): void {
+  try {
+    if (items.length === 0) localStorage.removeItem(PENDING_PROFILE_MEDIA_KEY);
+    else localStorage.setItem(PENDING_PROFILE_MEDIA_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export function queueProfileMedia(item: PendingProfileMedia): void {
+  const items = readPendingProfileMedia().filter(
+    p => p.txid.toLowerCase() !== item.txid.toLowerCase(),
+  );
+  items.push({ ...item, txid: item.txid.toLowerCase() });
+  writePendingProfileMedia(items);
+}
+
+/** Retry artwork links that were queued when the index was slow. */
+export async function flushPendingProfileMedia(): Promise<void> {
+  const items = readPendingProfileMedia();
+  if (items.length === 0) return;
+  const remaining: PendingProfileMedia[] = [];
+  for (const item of items) {
+    try {
+      await postProfileMedia(item.txid, {
+        ...(item.avatar !== undefined ? { avatar: item.avatar } : {}),
+        ...(item.banner !== undefined ? { banner: item.banner } : {}),
+      });
+    } catch {
+      remaining.push(item);
+    }
+  }
+  writePendingProfileMedia(remaining);
 }
 
 export async function createPost(input: {
@@ -159,6 +302,7 @@ export interface MyPetSummary {
   txid: string;
   name: string;
   species: string;
+  avatar: string | null;
   tributes: number;
   at: string;
 }

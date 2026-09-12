@@ -1,4 +1,5 @@
 import { DANA_INDEX_BASE } from './config.js';
+import type { ProfileMediaLinks } from './socialApi.js';
 
 export interface IndexBurn {
   burnTxid: string;
@@ -23,6 +24,8 @@ export interface IndexMemorialGroup {
   totalPaw?: number;
   at: string;
   burns: IndexBurn[];
+  /** Off-chain avatar/banner keys, when uploaded. */
+  media?: ProfileMediaLinks | null;
 }
 
 export async function fetchRecentBurns(limit = 40): Promise<IndexBurn[]> {
