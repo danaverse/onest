@@ -13,6 +13,10 @@ export interface IndexBurn {
   blockTimestamp: number | null;
   timeFirstSeen: string;
   burnAtoms?: string;
+  /** Creator attribution (install id / wallets) used for own-pet checks. */
+  creatorInstallId?: string;
+  creatorAddress?: string;
+  senderAddress?: string;
   /** Artwork of the profile this burn belongs to, when uploaded. */
   media?: ProfileMediaLinks | null;
 }

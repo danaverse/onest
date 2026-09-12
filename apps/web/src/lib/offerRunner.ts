@@ -24,6 +24,8 @@ export interface SponsoredOfferInput {
   direction?: 0 | 1;
   /** Sponsored profiles stamp the creator's wallet address (creatorHash160). */
   creatorAddress?: string;
+  /** Sponsored posts are only allowed for the user's own pet roots. */
+  petRootTxid?: string;
   onProgress?: (message: string) => void;
 }
 
@@ -69,6 +71,7 @@ async function challengeMineAndSubmit(
         postHash: input.postHash,
         direction: input.direction,
         creatorAddress: input.creatorAddress,
+        petRootTxid: input.petRootTxid,
       });
 
       onProgress?.(`Mining PoW (${challenge.bits} bits)...`);

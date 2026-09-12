@@ -3,9 +3,17 @@
  * content hash. No PoW, no wait. A retry reuses the pending payment.
  */
 import type { Wallet } from 'ecash-wallet';
-import { MINT_API_BASE, getOrCreateInstallId } from './config.js';
+import {
+  MINT_API_BASE,
+  PAW_TOKEN_ID,
+  getOrCreateInstallId,
+} from './config.js';
+import { notifyBurn } from './profileCreation.js';
 
 const PENDING_PAYMENT_KEY = 'onest.pendingPostPayment';
+
+/** Wallet PAW path: the burn tx only needs a small XEC postage/fee reserve. */
+export const MIN_POST_PAW_XEC_SATS = 1_000n;
 
 interface WalletUtxoLike {
   sats: bigint;
@@ -53,9 +61,51 @@ export async function fetchPostFee(): Promise<PostFeeInfo> {
   return res.json();
 }
 
+/** Atoms a wallet PAW post spends on another pet: 1 stamp + 1 for the creator. */
+export const OTHER_PET_POST_PAW_ATOMS = 2n;
+
+/**
+ * Wallet PAW path for pets you do not own: burn 1 atom with the DANA v4
+ * content hash and send 1 atom to the pet creator, all from your wallet.
+ * No desk fee; XEC only covers the tx.
+ */
+export async function createPostWithPaw(opts: {
+  wallet: Wallet;
+  contentHash: string;
+  /** Required for other-pet posts: receives the 1-atom creator reward. */
+  creatorAddress?: string;
+  onProgress?: (message: string) => void;
+}): Promise<{ burnTxid: string }> {
+  opts.onProgress?.(
+    opts.creatorAddress
+      ? 'Burning 1 PAW and rewarding the creator 1 PAW...'
+      : 'Burning 1 PAW for this moment...',
+  );
+  // Lazy: keeps ecash-lib/wasm out of the main bundle.
+  const { burnOnePaw } = await import('../../../../src/offering/burnPaw.js');
+  const { encodePostStampPushdata } = await import(
+    '../../../../src/social/danaSocial.js'
+  );
+  const result = await burnOnePaw({
+    wallet: opts.wallet,
+    tokenId: PAW_TOKEN_ID,
+    pushdata: encodePostStampPushdata(opts.contentHash),
+    burnAtoms: 1n,
+    ...(opts.creatorAddress
+      ? { feeAtoms: 1n, feeAddress: opts.creatorAddress }
+      : {}),
+    autoSelectUtxos: true,
+  });
+  notifyBurn(result.txid);
+  await opts.wallet.sync().catch(() => undefined);
+  return { burnTxid: result.txid };
+}
+
 export async function createPaidPostWithXec(opts: {
   wallet: Wallet;
   contentHash: string;
+  /** Pet the post belongs to; other-pet posts also reward the creator. */
+  petRootTxid?: string;
   onProgress?: (message: string) => void;
 }): Promise<{ burnTxid: string }> {
   const installId = getOrCreateInstallId();
@@ -96,13 +146,14 @@ export async function createPaidPostWithXec(opts: {
       address: wallet.address,
       paymentTxid,
       contentHash: opts.contentHash,
+      petRootTxid: opts.petRootTxid,
     }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const message =
       (err as { error?: string }).error || `Post create HTTP ${res.status}`;
-    const transient = /still propagating/i.test(message);
+    const transient = /still propagating|try again shortly/i.test(message);
     const alreadyUsed = /already been used/i.test(message);
     if (!transient) clearPendingPayment();
     throw new Error(

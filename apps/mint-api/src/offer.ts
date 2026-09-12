@@ -392,6 +392,34 @@ export function notifyDanaIndex(
   });
 }
 
+/**
+ * Does this install own the given pet root? Local creator ledger first
+ * (sponsored / desk-paid burns this desk performed), then dana-index
+ * attribution by installId. Fails closed when neither can confirm.
+ */
+async function installOwnsPet(
+  installId: string,
+  petRootTxid: string,
+): Promise<boolean> {
+  const txid = normalizeHex64(petRootTxid);
+  if (!txid) return false;
+  if (rootCreatorMatch(txid) === installId) return true;
+  const base = process.env.DANA_INDEX_URL?.trim();
+  if (!base) return false;
+  try {
+    const res = await fetch(
+      `${base.replace(/\/$/, '')}/api/pets?installId=${encodeURIComponent(installId)}`,
+    );
+    if (!res.ok) return false;
+    const data = (await res.json()) as { pets?: Array<{ txid?: string }> };
+    return (data.pets ?? []).some(
+      p => String(p.txid || '').toLowerCase() === txid,
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function publicStatus(installId?: string) {
   const dep = loadDepJson();
   return {
@@ -447,6 +475,8 @@ export interface ChallengeInput {
   targetType?: unknown;
   /** Wallet address to stamp as the creator of a sponsored profile. */
   creatorAddress?: string;
+  /** Pet root being posted to; sponsored posts are own-pet only. */
+  petRootTxid?: string;
 }
 
 export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengePublic> {
@@ -505,6 +535,15 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
   if (kind === 'post') {
     contentHash = normalizeHex64(opts.contentHash) ?? undefined;
     if (!contentHash) throw new Error('contentHash required (64 hex) for post stamps');
+    const petRoot = normalizeHex64(opts.petRootTxid);
+    if (!petRoot) {
+      throw new Error('petRootTxid required (64 hex) for sponsored posts');
+    }
+    if (!(await installOwnsPet(opts.installId, petRoot))) {
+      throw new Error(
+        'Sponsored posts are for your own pets. Posting on other pets needs XEC or 1 PAW.',
+      );
+    }
   }
   if (kind === 'vote') {
     postHash = normalizeHex64(opts.postHash) ?? undefined;

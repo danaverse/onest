@@ -137,6 +137,8 @@ const server = createServer(async (req, res) => {
         address: String(body.address || ''),
         paymentTxid: String(body.paymentTxid || ''),
         contentHash: String(body.contentHash || ''),
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, result);
       return;
@@ -254,6 +256,8 @@ const server = createServer(async (req, res) => {
         targetType: body.targetType,
         creatorAddress:
           typeof body.creatorAddress === 'string' ? body.creatorAddress : undefined,
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, challenge);
       return;

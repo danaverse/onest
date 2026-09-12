@@ -7,7 +7,13 @@ import {
   pollPostVerified,
   uploadImage,
 } from '../lib/socialApi.js';
-import { createPaidPostWithXec, fetchPostFee } from '../lib/paidPost.js';
+import {
+  createPaidPostWithXec,
+  createPostWithPaw,
+  fetchPostFee,
+  MIN_POST_PAW_XEC_SATS,
+  OTHER_PET_POST_PAW_ATOMS,
+} from '../lib/paidPost.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
@@ -17,6 +23,10 @@ export interface PetOption {
   name: string;
   species?: string;
   avatar?: string | null;
+  /** True when this install/wallet created the pet profile. */
+  isOwn?: boolean;
+  /** Creator wallet of the pet root (receives the other-pet post reward). */
+  creatorAddress?: string | null;
 }
 
 export function PostComposerModal(props: {
@@ -71,9 +81,26 @@ export function PostComposerModal(props: {
   if (!props.open) return null;
 
   const xecSats = userWallet.balances?.xecSats ?? 0n;
-  const canPayPost = postFeeSats != null && xecSats >= postFeeSats + 500n;
+  const pawAtoms = userWallet.balances?.pawAtoms ?? 0n;
+  const selectedPet = props.pets.find(p => p.txid === petTxid);
+  const isOwnPet = selectedPet?.isOwn === true;
+  const creatorAddress = selectedPet?.creatorAddress ?? null;
+  const canPayXec = postFeeSats != null && xecSats >= postFeeSats + 500n;
+  /** Other pets: 1 PAW stamp burned + 1 PAW sent to the creator. */
+  const usePaw =
+    !isOwnPet &&
+    !!creatorAddress &&
+    pawAtoms >= OTHER_PET_POST_PAW_ATOMS &&
+    xecSats >= MIN_POST_PAW_XEC_SATS;
+  /** Desk-sponsored posts are only for the user's own pets. */
   const sponsoredAvailable =
-    userWallet.status === 'unlocked' && postFeeSats != null && !canPayPost;
+    userWallet.status === 'unlocked' && isOwnPet && postFeeSats != null && !canPayXec;
+  const blocked =
+    userWallet.status === 'unlocked' &&
+    postFeeSats != null &&
+    !sponsoredAvailable &&
+    !canPayXec &&
+    !usePaw;
 
   function resetForm() {
     setCaption('');
@@ -93,7 +120,7 @@ export function PostComposerModal(props: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || !petTxid || !caption.trim()) return;
+    if (busy || blocked || !petTxid || !caption.trim()) return;
     if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
       setErr(t('userProfileRequired'));
       props.onRequestWallet?.();
@@ -125,16 +152,27 @@ export function PostComposerModal(props: {
             await runSponsoredOffer({
               kind: 'post',
               contentHash: created.contentHash,
+              petRootTxid: petTxid,
               onProgress: setProgress,
             })
           ).burnTxid
-        : (
-            await createPaidPostWithXec({
-              wallet: userWallet.wallet,
-              contentHash: created.contentHash,
-              onProgress: setProgress,
-            })
-          ).burnTxid;
+        : usePaw
+          ? (
+              await createPostWithPaw({
+                wallet: userWallet.wallet,
+                contentHash: created.contentHash,
+                creatorAddress: creatorAddress ?? undefined,
+                onProgress: setProgress,
+              })
+            ).burnTxid
+          : (
+              await createPaidPostWithXec({
+                wallet: userWallet.wallet,
+                contentHash: created.contentHash,
+                petRootTxid: petTxid,
+                onProgress: setProgress,
+              })
+            ).burnTxid;
 
       setProgress(t('verifyingPost'));
       const verified = await pollPostVerified(created.id);
@@ -259,7 +297,13 @@ export function PostComposerModal(props: {
             {progress && <div className="status-box">{progress}</div>}
             {!busy && (
               <p className="pow-hint">
-                {sponsoredAvailable ? t('sponsoredPostHint') : t('postFeeHint')}
+                {blocked
+                  ? t('postNeedPawOrXec')
+                  : sponsoredAvailable
+                    ? t('sponsoredPostHint')
+                    : usePaw
+                      ? t('postOtherPetHint')
+                      : t('postFeeHint')}
               </p>
             )}
 
@@ -269,14 +313,16 @@ export function PostComposerModal(props: {
               </button>
               <button
                 type="submit"
-                disabled={busy || !petTxid || !caption.trim()}
+                disabled={busy || blocked || !petTxid || !caption.trim()}
                 className="btn-primary"
               >
                 {busy
                   ? t('posting')
                   : sponsoredAvailable
                     ? t('sponsoredPostButton')
-                    : t('postSubmit')}
+                    : usePaw
+                      ? t('postPawButton')
+                      : t('postSubmit')}
               </button>
             </div>
           </form>
