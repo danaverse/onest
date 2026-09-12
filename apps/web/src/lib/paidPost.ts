@@ -41,6 +41,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+export interface PostFeeInfo {
+  xec: string;
+  xecSats: string;
+  address: string;
+}
+
+export async function fetchPostFee(): Promise<PostFeeInfo> {
+  const res = await fetch(`${MINT_API_BASE}/api/post/fee`);
+  if (!res.ok) throw new Error(`Post fee HTTP ${res.status}`);
+  return res.json();
+}
+
 export async function createPaidPostWithXec(opts: {
   wallet: Wallet;
   contentHash: string;
@@ -54,9 +66,7 @@ export async function createPaidPostWithXec(opts: {
     opts.onProgress?.('Retrying with your previous payment...');
   } else {
     opts.onProgress?.('Fetching the post fee...');
-    const feeRes = await fetch(`${MINT_API_BASE}/api/post/fee`);
-    if (!feeRes.ok) throw new Error(`Post fee HTTP ${feeRes.status}`);
-    const fee = await feeRes.json();
+    const fee = await fetchPostFee();
 
     await wallet.sync();
     const pureSats = (wallet.utxos as unknown as WalletUtxoLike[])

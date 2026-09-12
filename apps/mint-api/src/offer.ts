@@ -7,7 +7,7 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { resolve } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { fromHex, toHex, Script } from 'ecash-lib';
+import { fromHex, toHex, Script, Address } from 'ecash-lib';
 import type { Wallet } from 'ecash-wallet';
 import { createChronik } from '../../../src/network/createChronik.js';
 import { getMedianTimePast } from '../../../src/network/medianTimePast.js';
@@ -38,9 +38,12 @@ import {
   parseParentBurnTxidHex,
 } from '../../../src/offering/burnPaw.js';
 import {
+  OP_RETURN_SCRIPT_MAX_BYTES,
   memorialNoteMaxBytes,
+  parseAnimalProfileNote,
   prepareDanaNote,
   truncateUtf8Bytes,
+  utf8ByteLength,
   isDeathDateAmendNote,
   isRelationshipAmendNote,
 } from '../../../src/offering/animalProfileFields.js';
@@ -63,6 +66,7 @@ import {
 import {
   minPrayWaitUntilMs,
   parseMinPraySeconds,
+  MAX_MIN_PRAY_SECONDS,
 } from '../../../src/lib/minPray.js';
 import { resolveRemintLocktime } from '../../../src/mint/remintLocktime.js';
 import {
@@ -104,6 +108,10 @@ import {
   rememberRootCreator,
   rootCreatorMatch,
 } from './rootCreators.js';
+import {
+  hasSponsoredProfile,
+  rememberSponsoredProfile,
+} from './sponsoredProfiles.js';
 
 const MAX_OFFERS_PER_DAY = Math.max(
   1,
@@ -138,12 +146,43 @@ const PENDING_BURN_TTL_MS = 15 * 60_000;
 /** Server-enforced soft wait ("min pray"). Default 54s, 0 disables. */
 const MIN_PRAY_SECONDS = parseMinPraySeconds(process.env.MINT_MIN_PRAY_SECONDS);
 
+/** Sponsored first pet profile: desk sponsors a 6-atom burn after a longer wait. */
+const PROFILE_PRAY_SECONDS = resolvePraySeconds(
+  process.env.MINT_PROFILE_MIN_PRAY_SECONDS,
+  120,
+);
+/** Sponsored post stamps: desk sponsors a 1-atom burn after a shorter wait. */
+const POST_PRAY_SECONDS = resolvePraySeconds(
+  process.env.MINT_POST_MIN_PRAY_SECONDS,
+  60,
+);
+
+function resolvePraySeconds(raw: string | undefined, fallback: number): number {
+  const s = String(raw ?? '').trim();
+  if (s === '') return fallback;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  if (n === 0) return 0;
+  return Math.min(MAX_MIN_PRAY_SECONDS, Math.round(n));
+}
+
+function praySecondsForKind(kind: BurnKind): number {
+  if (kind === 'profile') return PROFILE_PRAY_SECONDS;
+  if (kind === 'post') return POST_PRAY_SECONDS;
+  return MIN_PRAY_SECONDS;
+}
+
+/** Atoms the sponsored burn spends: 6 for a profile (rebirth), 1 otherwise. */
+function sponsoredBurnAtoms(kind: BurnKind): bigint {
+  return kind === 'profile' ? 6n : 1n;
+}
+
 /** PAW atoms the user's wallet pays the desk on user-paid burns. */
 const LISTING_FEE_ATOMS = resolvePawListingFeeAtoms(
   process.env.MINT_LISTING_FEE_ATOMS,
 );
 
-export type BurnKind = 'memorial' | 'post' | 'vote';
+export type BurnKind = 'memorial' | 'profile' | 'post' | 'vote';
 
 /** Thrown by /api/burn when the soft wait has not elapsed yet. */
 export class WaitNotElapsedError extends Error {
@@ -234,6 +273,8 @@ interface ActiveChallenge {
   postHash?: string;
   voteDirection?: VoteDirection;
   voteTargetType?: number;
+  /** Hex hash160 stamped into sponsored profile burns (v5 creator). */
+  creatorHash160?: string;
 }
 
 interface PendingBurn {
@@ -249,6 +290,7 @@ interface PendingBurn {
   postHash?: string;
   voteDirection?: VoteDirection;
   voteTargetType?: number;
+  creatorHash160?: string;
   createdAt: number;
   expiresAt: number;
   waitUntilMs: number;
@@ -366,7 +408,9 @@ export function publicStatus(installId?: string) {
     servingTipCount: servingTipCount(),
     raceOpen: true,
     minPraySeconds: MIN_PRAY_SECONDS,
-    burnKinds: ['memorial', 'post', 'vote'],
+    profilePraySeconds: PROFILE_PRAY_SECONDS,
+    postPraySeconds: POST_PRAY_SECONDS,
+    burnKinds: ['memorial', 'profile', 'post', 'vote'],
     listingFeeAtoms: LISTING_FEE_ATOMS.toString(),
   };
 }
@@ -401,6 +445,8 @@ export interface ChallengeInput {
   postHash?: string;
   direction?: unknown;
   targetType?: unknown;
+  /** Wallet address to stamp as the creator of a sponsored profile. */
+  creatorAddress?: string;
 }
 
 export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengePublic> {
@@ -410,9 +456,43 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
   }
 
   const kind: BurnKind =
-    opts.kind === 'post' ? 'post' : opts.kind === 'vote' ? 'vote' : 'memorial';
-  // Pet profiles are user-paid: the wallet burns 6 PAW + pays the listing fee.
-  // Sponsored memorials are tributes only (they carry parentBurnTxid).
+    opts.kind === 'post'
+      ? 'post'
+      : opts.kind === 'vote'
+        ? 'vote'
+        : opts.kind === 'profile'
+          ? 'profile'
+          : 'memorial';
+
+  let profileNote = '';
+  let creatorHash160: string | undefined;
+  if (kind === 'profile') {
+    if (opts.parentBurnTxid) {
+      throw new Error('Sponsored profiles cannot carry a parent burn');
+    }
+    profileNote = String(opts.note || '').trim();
+    if (!profileNote) throw new Error('note required for sponsored profiles');
+    if (!parseAnimalProfileNote(profileNote)?.name) {
+      throw new Error('note must be an animal profile with a name');
+    }
+    if (utf8ByteLength(profileNote) > OP_RETURN_SCRIPT_MAX_BYTES) {
+      throw new Error('profile note too long');
+    }
+    if (hasSponsoredProfile(opts.installId)) {
+      throw new Error('Sponsored profile already used on this device');
+    }
+    const creator = String(opts.creatorAddress || '').trim();
+    if (creator) {
+      try {
+        creatorHash160 = Address.parse(creator).hash;
+      } catch {
+        throw new Error('valid creatorAddress required');
+      }
+    }
+  }
+
+  // Pet profiles are user-paid from the wallet, except the first sponsored
+  // one (kind 'profile'). Sponsored root memorials are tributes only.
   if (kind === 'memorial' && !opts.parentBurnTxid) {
     throw new Error(
       'Pet profiles must be created from your wallet (user profile required). Sponsored burns are for tributes only.',
@@ -511,7 +591,12 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
 
   const challengeId = randomUUID();
   const expiresAt = Date.now() + CHALLENGE_TTL_MS;
-  const note = opts.note ? prepareDanaNote(opts.note, Boolean(opts.parentBurnTxid)) : '';
+  const note =
+    kind === 'profile'
+      ? profileNote
+      : opts.note
+        ? prepareDanaNote(opts.note, Boolean(opts.parentBurnTxid))
+        : '';
   const tipState = computeMooreTipState(locktime, contract.params);
 
   const active: ActiveChallenge = {
@@ -533,6 +618,7 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
     postHash,
     voteDirection,
     voteTargetType,
+    creatorHash160,
   };
 
   challenges.set(challengeId, active);
@@ -561,7 +647,7 @@ export async function enqueueChallenge(opts: ChallengeInput): Promise<ChallengeP
     postHash,
     direction: voteDirection,
     targetType: voteTargetType,
-    minPraySeconds: MIN_PRAY_SECONDS,
+    minPraySeconds: praySecondsForKind(kind),
   };
 }
 
@@ -605,7 +691,10 @@ export async function enqueueSubmit(opts: {
   }
 
   const burnToken = randomBytes(32).toString('hex');
-  const waitUntilMs = minPrayWaitUntilMs(ch.createdAt, MIN_PRAY_SECONDS);
+  const waitUntilMs = minPrayWaitUntilMs(
+    ch.createdAt,
+    praySecondsForKind(ch.kind),
+  );
 
   pendingBurns.set(remintTxid, {
     installId: opts.installId,
@@ -620,6 +709,7 @@ export async function enqueueSubmit(opts: {
     postHash: ch.postHash,
     voteDirection: ch.voteDirection,
     voteTargetType: ch.voteTargetType,
+    creatorHash160: ch.creatorHash160,
     createdAt: Date.now(),
     expiresAt: Date.now() + PENDING_BURN_TTL_MS,
     waitUntilMs,
@@ -639,13 +729,13 @@ export async function enqueueSubmit(opts: {
     powAttempts,
     powMs,
     hashrateHps,
-    deskAtomsKept: Number(PAW_MINER_ATOMS) - 1,
+    deskAtomsKept: Number(PAW_MINER_ATOMS) - Number(sponsoredBurnAtoms(ch.kind)),
     note: ch.note,
     explorerRemint: explorerTx(remintTxid),
     explorerBurn: '',
     kind: ch.kind,
     waitUntil: new Date(waitUntilMs).toISOString(),
-    minPraySeconds: MIN_PRAY_SECONDS,
+    minPraySeconds: praySecondsForKind(ch.kind),
   };
 }
 
@@ -680,15 +770,22 @@ export async function enqueueBurn(opts: {
     });
   }
 
+  const burnAtoms = sponsoredBurnAtoms(pending.kind);
+  const note =
+    pending.kind === 'memorial' || pending.kind === 'profile' ? pending.note : '';
+
   const burnRes = await burnOnePaw({
     wallet: tipWallet.wallet,
     tokenId: pending.tokenId,
-    note: pending.kind === 'memorial' ? pending.note : '',
+    note,
     parentBurnTxid: pending.parentBurnTxid,
-    burnAtoms: 1n,
+    creatorHash160:
+      pending.kind === 'profile' ? pending.creatorHash160 : undefined,
+    burnAtoms,
     pushdata,
   });
 
+  if (pending.kind === 'profile') rememberSponsoredProfile(opts.installId);
   notifyDanaIndex(burnRes.txid, opts.installId);
   rememberRootCreator(pending.parentBurnTxid || burnRes.txid, opts.installId);
 
@@ -696,9 +793,9 @@ export async function enqueueBurn(opts: {
     remintTxid: pending.remintTxid,
     burnTxid: burnRes.txid,
     tokenId: pending.tokenId,
-    deskAtomsKept: Number(PAW_MINER_ATOMS) - 1,
-    burnAtoms: '1',
-    note: pending.kind === 'memorial' ? pending.note : '',
+    deskAtomsKept: Number(PAW_MINER_ATOMS) - Number(burnAtoms),
+    burnAtoms: burnAtoms.toString(),
+    note,
     explorerRemint: explorerTx(pending.remintTxid),
     explorerBurn: explorerTx(burnRes.txid),
     kind: pending.kind,

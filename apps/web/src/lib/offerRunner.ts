@@ -22,6 +22,8 @@ export interface SponsoredOfferInput {
   contentHash?: string;
   postHash?: string;
   direction?: 0 | 1;
+  /** Sponsored profiles stamp the creator's wallet address (creatorHash160). */
+  creatorAddress?: string;
   onProgress?: (message: string) => void;
 }
 
@@ -66,6 +68,7 @@ async function challengeMineAndSubmit(
         contentHash: input.contentHash,
         postHash: input.postHash,
         direction: input.direction,
+        creatorAddress: input.creatorAddress,
       });
 
       onProgress?.(`Mining PoW (${challenge.bits} bits)...`);
@@ -122,7 +125,9 @@ export async function runSponsoredOffer(
         ? 'Stamping this moment...'
         : input.kind === 'vote'
           ? 'Dedicating your vote...'
-          : 'Dedicating on-chain paw-print burn...';
+          : input.kind === 'profile'
+            ? 'Creating your sponsored profile...'
+            : 'Dedicating on-chain paw-print burn...';
     await waitWithCountdown(waitUntilMs, onProgress, label);
     onProgress?.(label);
 

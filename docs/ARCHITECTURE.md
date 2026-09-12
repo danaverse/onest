@@ -299,7 +299,7 @@ Take: SHA-256 of bytes, CDN delivery, on-chain hash stamp, weighted up/down burn
 - Server-enforced soft wait (`MINT_MIN_PRAY_SECONDS`, default 54)
 - Canvas client-side image compression; atom-weighted trending
 - User profiles: in-app `ecash-wallet` (BIP39, AES-GCM seed vault in IndexedDB, backup/restore/lock) with signed `install_id ↔ address` binding (`users` table)
-- Wallet-paid pet profiles: 6 PAW burn (rebirth) + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side
+- Wallet-paid pet profiles: 6 PAW burn (rebirth) + 6-atom desk listing fee, no wait; sponsored root memorials rejected server-side, except the first sponsored pet profile per install (6-atom desk burn, ~2 minute wait, `MINT_PROFILE_MIN_PRAY_SECONDS`). Sponsored post stamps are desk-funded too (1 atom, ~1 minute wait, `MINT_POST_MIN_PRAY_SECONDS`)
 - Lixi-style home timeline with a composer card and **pet pages** (`/:txid`) showing a pet's moments and paw tributes
 
 ### Still to add

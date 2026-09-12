@@ -2,7 +2,7 @@
 /**
  * Onest PAW Mint API server.
  *
- *   POST /api/challenge  { installId, note?, parentBurnTxid? }
+ *   POST /api/challenge  { installId, kind?, note?, parentBurnTxid?, contentHash?, postHash?, creatorAddress? }
  *   POST /api/submit     { installId, challengeId, nonceHex, powMs?, powAttempts? }
  *   POST /api/burn       { installId, remintTxid, burnToken }
  *   POST /api/cancel     { installId, challengeId?, remintTxid?, burnToken? }
@@ -252,6 +252,8 @@ const server = createServer(async (req, res) => {
         postHash: typeof body.postHash === 'string' ? body.postHash : undefined,
         direction: body.direction,
         targetType: body.targetType,
+        creatorAddress:
+          typeof body.creatorAddress === 'string' ? body.creatorAddress : undefined,
       });
       json(res, 200, challenge);
       return;
