@@ -1,0 +1,26 @@
+{
+  "name": "Onest",
+  "install": "npm ci && npm run build",
+  "terminals": [
+    {
+      "name": "mint-api",
+      "command": "npm run mint-api",
+      "description": "PAW mint / PoW challenge & burn API (http://localhost:8787, /health)."
+    },
+    {
+      "name": "dana-index",
+      "command": "npm run dana-index",
+      "description": "Chronik-backed DANA burn index & social store (http://localhost:8788, /health)."
+    },
+    {
+      "name": "web",
+      "command": "npm run web",
+      "description": "Onest PWA Vite dev server (http://localhost:5173, proxies /api -> 8787 and /index-api -> 8788)."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 5173 },
+    { "name": "mint-api", "port": 8787 },
+    { "name": "dana-index", "port": 8788 }
+  ]
+}
