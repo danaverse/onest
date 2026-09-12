@@ -112,6 +112,8 @@ export function AnimalProfileModal(props: {
   const payMode = isCreate && unlocked && pawAtoms < MIN_PROFILE_PAW;
   const neededXec = payMode ? MIN_PAY_XEC_SATS : MIN_PROFILE_XEC_SATS;
   const xecShort = unlocked && xecSats < neededXec;
+  /** First profile can be desk-sponsored (6 PAW, ~2 min wait) when short. */
+  const sponsoredAvailable = isCreate && unlocked && xecShort;
 
   function buildProfileFields(): AnimalProfileFields {
     return {
@@ -313,6 +315,38 @@ export function AnimalProfileModal(props: {
     }
   }
 
+  /** Desk-sponsored first profile: 6 PAW burn after the server-enforced wait. */
+  async function handleSponsoredProfile() {
+    if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
+      setErr(t('userProfileRequired'));
+      props.onRequestWallet?.();
+      return;
+    }
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    setSuccessTxid(null);
+    setOfferingBlocksPwaReload(true);
+    try {
+      const links = await uploadArtwork();
+      const note = encodeAnimalProfileNote(buildProfileFields());
+      const result = await runSponsoredOffer({
+        kind: 'profile',
+        note,
+        creatorAddress: userWallet.wallet.address,
+        onProgress: setProgress,
+      });
+      await linkArtwork(result.burnTxid, links);
+      setSuccessTxid(result.burnTxid);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error creating profile');
+    } finally {
+      setOfferingBlocksPwaReload(false);
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
   return (
     <div className="modal-backdrop" onClick={busy ? undefined : handleClose}>
       <div className="modal-content profile-modal" onClick={e => e.stopPropagation()}>
@@ -473,10 +507,19 @@ export function AnimalProfileModal(props: {
                 <p>
                   {!unlocked
                     ? t('userProfileRequired')
-                    : t('needXecForProfile')}
+                    : t('sponsoredProfileHint')}
                 </p>
                 {userWallet.address && (
                   <code className="wallet-address">{userWallet.address}</code>
+                )}
+                {sponsoredAvailable && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => void handleSponsoredProfile()}
+                  >
+                    {t('sponsoredProfileButton')}
+                  </button>
                 )}
                 <button
                   type="button"

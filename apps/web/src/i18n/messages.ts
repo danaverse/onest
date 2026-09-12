@@ -41,6 +41,8 @@ export type MessageKey =
   | 'captionPlaceholder'
   | 'postFeeHint'
   | 'postNeedXec'
+  | 'sponsoredPostButton'
+  | 'sponsoredPostHint'
   | 'cancel'
   | 'posting'
   | 'postSubmit'
@@ -106,6 +108,8 @@ export type MessageKey =
   | 'profileFeeHint'
   | 'needPawForProfile'
   | 'needXecForProfile'
+  | 'sponsoredProfileButton'
+  | 'sponsoredProfileHint'
   | 'payToCreate'
   | 'payToCreateWithXec'
   | 'payNeedXec'
@@ -170,6 +174,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     postFeeHint:
       'Posting stamps instantly on-chain: the desk burns 1 PAW for a small XEC fee — no mining wait.',
     postNeedXec: 'You need a little more XEC to post.',
+    sponsoredPostButton: 'Post free — about 1 minute',
+    sponsoredPostHint:
+      'No XEC for the stamp? The desk can sponsor this post after a short wait.',
     cancel: 'Cancel',
     posting: 'Stamping...',
     postSubmit: 'Share moment',
@@ -241,6 +248,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Creating an animal profile burns 6 PAW (rebirth) and pays a {atoms}-atom listing fee from your wallet — or pay a flat XEC fee if you have no PAW.',
     needPawForProfile: 'Your wallet needs at least {atoms} PAW (6 burn + listing fee).',
     needXecForProfile: 'Your wallet needs a little XEC for network fees.',
+    sponsoredProfileButton: 'Create free — about 2 minutes',
+    sponsoredProfileHint:
+      'No PAW or XEC yet? Your first profile can be sponsored by the desk after a short wait.',
     payToCreate: 'Pay XEC to create profile',
     payToCreateWithXec: 'Pay {xec} XEC to create profile',
     payNeedXec: 'You need a little more XEC to pay the profile fee.',
@@ -305,6 +315,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     postFeeHint:
       'Đăng bài được ghi lên chuỗi ngay: bàn đốt 1 PAW với một khoản phí XEC nhỏ — không cần chờ đào.',
     postNeedXec: 'Bạn cần thêm một ít XEC để đăng bài.',
+    sponsoredPostButton: 'Đăng miễn phí — khoảng 1 phút',
+    sponsoredPostHint:
+      'Chưa đủ XEC để đóng dấu? Nhà bàn tài trợ 1 PAW sau ít phút chờ.',
     cancel: 'Huỷ',
     posting: 'Đang in dấu...',
     postSubmit: 'Chia sẻ khoảnh khắc',
@@ -376,6 +389,9 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
       'Tạo hồ sơ thú cưng sẽ đốt 6 PAW và trả phí niêm yết {atoms} atom từ ví của bạn — hoặc trả một khoản XEC cố định nếu bạn chưa có PAW.',
     needPawForProfile: 'Ví cần ít nhất {atoms} PAW (6 đốt + phí niêm yết).',
     needXecForProfile: 'Ví cần một ít XEC cho phí mạng.',
+    sponsoredProfileButton: 'Tạo miễn phí — khoảng 2 phút',
+    sponsoredProfileHint:
+      'Chưa có PAW hoặc XEC? Hồ sơ đầu tiên được nhà bàn tài trợ sau ít phút chờ.',
     payToCreate: 'Trả XEC để tạo hồ sơ',
     payToCreateWithXec: 'Trả {xec} XEC để tạo hồ sơ',
     payNeedXec: 'Bạn cần thêm một ít XEC để trả phí tạo hồ sơ.',
@@ -439,6 +455,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     captionPlaceholder: '留下爱的记忆...',
     postFeeHint: '发布将立即上链：服务台销毁 1 PAW，只需少量 XEC 费用——无需等待挖矿。',
     postNeedXec: '需要更多 XEC 才能发布。',
+    sponsoredPostButton: '免费发布 — 约 1 分钟',
+    sponsoredPostHint: 'XEC 不足？服务台可赞助本次发布，需短暂等待。',
     cancel: '取消',
     posting: '正在印下...',
     postSubmit: '分享瞬间',
@@ -505,6 +523,8 @@ export const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
     profileFeeHint: '创建宠物档案将从钱包销毁 6 PAW 并支付 {atoms} atom 上架费——如果没有 PAW，也可以支付固定 XEC 费用。',
     needPawForProfile: '钱包至少需要 {atoms} PAW（6 销毁 + 上架费）。',
     needXecForProfile: '钱包需要少量 XEC 支付网络费。',
+    sponsoredProfileButton: '免费创建 — 约 2 分钟',
+    sponsoredProfileHint: '还没有 PAW 或 XEC？第一个档案可由服务台赞助，需短暂等待。',
     payToCreate: '用 XEC 支付创建档案',
     payToCreateWithXec: '支付 {xec} XEC 创建档案',
     payNeedXec: '需要更多 XEC 来支付档案费用。',

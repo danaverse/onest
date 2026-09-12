@@ -7,7 +7,8 @@ import {
   pollPostVerified,
   uploadImage,
 } from '../lib/socialApi.js';
-import { createPaidPostWithXec } from '../lib/paidPost.js';
+import { createPaidPostWithXec, fetchPostFee } from '../lib/paidPost.js';
+import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
@@ -40,6 +41,7 @@ export function PostComposerModal(props: {
   const [success, setSuccess] = useState<{ postId: string; burnTxid: string; pending: boolean } | null>(
     null,
   );
+  const [postFeeSats, setPostFeeSats] = useState<bigint | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
 
   /* Keep the preselected pet visible when the popup opens. */
@@ -50,7 +52,28 @@ export function PostComposerModal(props: {
       ?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }, [props.open, petTxid]);
 
+  /* Post fee decides paid vs desk-sponsored (1 atom, ~1 min wait). */
+  useEffect(() => {
+    if (!props.open) return;
+    let cancelled = false;
+    fetchPostFee()
+      .then(fee => {
+        if (!cancelled) setPostFeeSats(BigInt(fee.xecSats));
+      })
+      .catch(() => {
+        if (!cancelled) setPostFeeSats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open]);
+
   if (!props.open) return null;
+
+  const xecSats = userWallet.balances?.xecSats ?? 0n;
+  const canPayPost = postFeeSats != null && xecSats >= postFeeSats + 500n;
+  const sponsoredAvailable =
+    userWallet.status === 'unlocked' && postFeeSats != null && !canPayPost;
 
   function resetForm() {
     setCaption('');
@@ -97,17 +120,27 @@ export function PostComposerModal(props: {
         createdAt: Date.now(),
       });
 
-      const result = await createPaidPostWithXec({
-        wallet: userWallet.wallet,
-        contentHash: created.contentHash,
-        onProgress: setProgress,
-      });
+      const burnTxid = sponsoredAvailable
+        ? (
+            await runSponsoredOffer({
+              kind: 'post',
+              contentHash: created.contentHash,
+              onProgress: setProgress,
+            })
+          ).burnTxid
+        : (
+            await createPaidPostWithXec({
+              wallet: userWallet.wallet,
+              contentHash: created.contentHash,
+              onProgress: setProgress,
+            })
+          ).burnTxid;
 
       setProgress(t('verifyingPost'));
       const verified = await pollPostVerified(created.id);
       setSuccess({
         postId: created.id,
-        burnTxid: result.burnTxid,
+        burnTxid,
         pending: !verified,
       });
     } catch (e) {
@@ -224,7 +257,11 @@ export function PostComposerModal(props: {
 
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
-            {!busy && <p className="pow-hint">{t('postFeeHint')}</p>}
+            {!busy && (
+              <p className="pow-hint">
+                {sponsoredAvailable ? t('sponsoredPostHint') : t('postFeeHint')}
+              </p>
+            )}
 
             <div className="modal-actions">
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">
@@ -235,7 +272,11 @@ export function PostComposerModal(props: {
                 disabled={busy || !petTxid || !caption.trim()}
                 className="btn-primary"
               >
-                {busy ? t('posting') : t('postSubmit')}
+                {busy
+                  ? t('posting')
+                  : sponsoredAvailable
+                    ? t('sponsoredPostButton')
+                    : t('postSubmit')}
               </button>
             </div>
           </form>
