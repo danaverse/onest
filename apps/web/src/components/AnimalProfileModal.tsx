@@ -28,6 +28,32 @@ const MIN_PROFILE_XEC_SATS = 2_000n;
 /** Flat XEC fee (2,000 sats) plus network fees for the desk-paid path. */
 const MIN_PAY_XEC_SATS = 2_500n;
 
+/**
+ * Progressive YYYY-MM-DD formatting: hyphens are inserted as digits are
+ * typed (2020 → 2020-01 → 2020-01-01) and pasted values are normalized,
+ * including space-separated dates with single-digit month/day (2020 1 1).
+ */
+function formatDateInput(raw: string): string {
+  const groups = raw.trim().split(/[^\d]+/).filter(Boolean);
+  const pastedThreeParts =
+    groups.length >= 3 &&
+    groups[0] &&
+    groups[1] &&
+    groups[2] &&
+    ((groups[1].length === 1 && groups[2].length === 1) ||
+      (groups[1].length === 2 && groups[2].length === 2));
+  if (pastedThreeParts) {
+    const year = groups[0]!.slice(0, 4);
+    const month = groups[1]!.padStart(2, '0');
+    const day = groups[2]!.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
 export function AnimalProfileModal(props: {
   open: boolean;
   onClose: () => void;
@@ -367,9 +393,10 @@ export function AnimalProfileModal(props: {
                     <label>{t('birthDate')}</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       disabled={busy}
                       value={birthDate}
-                      onChange={e => setBirthDate(e.target.value)}
+                      onChange={e => setBirthDate(formatDateInput(e.target.value))}
                       placeholder="YYYY-MM-DD"
                     />
                   </div>
@@ -377,9 +404,10 @@ export function AnimalProfileModal(props: {
                     <label>{t('passingDate')}</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       disabled={busy}
                       value={passingDate}
-                      onChange={e => setPassingDate(e.target.value)}
+                      onChange={e => setPassingDate(formatDateInput(e.target.value))}
                       placeholder="YYYY-MM-DD"
                     />
                   </div>
