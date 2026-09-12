@@ -7,7 +7,7 @@
 # Safe to re-run: reuses deployments/mainnet-paw.json when present.
 #
 # Run as root on the prod VM (or with sudo). Bootstrap is idempotent:
-# creates the `deploy` user, sudoers, Node 22, systemd units, nginx vhost.
+# creates the `deploy` user, sudoers, Node 24, systemd units, nginx vhost.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,15 +59,15 @@ if [[ "$(id -u)" -eq 0 ]]; then
 fi
 
 export PATH="$ROOT/node_modules/.bin:/usr/local/bin:/usr/bin:${PATH:-}"
-if [[ ! -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  echo "provision-prod-paw: installing Node 22 to /usr/local/lib/nodejs-22"
-  curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz -o /tmp/node-v22.14.0-linux-x64.tar.xz
-  mkdir -p /usr/local/lib/nodejs-22
-  tar -xJf /tmp/node-v22.14.0-linux-x64.tar.xz -C /usr/local/lib/nodejs-22 --strip-components=1
-  rm -f /tmp/node-v22.14.0-linux-x64.tar.xz
+if [[ ! -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  echo "provision-prod-paw: installing Node 24 to /usr/local/lib/nodejs-24"
+  curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz -o /tmp/node-v24.21.0-linux-x64.tar.xz
+  mkdir -p /usr/local/lib/nodejs-24
+  tar -xJf /tmp/node-v24.21.0-linux-x64.tar.xz -C /usr/local/lib/nodejs-24 --strip-components=1
+  rm -f /tmp/node-v24.21.0-linux-x64.tar.xz
 fi
-if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  export PATH="/usr/local/lib/nodejs-22/bin:$PATH"
+if [[ -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  export PATH="/usr/local/lib/nodejs-24/bin:$PATH"
 fi
 chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
 

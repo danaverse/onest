@@ -12,8 +12,8 @@ MINT_PORT="${MINT_API_PORT:-9787}"
 
 chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
 
-if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  export PATH="/usr/local/lib/nodejs-22/bin:$PATH"
+if [[ -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  export PATH="/usr/local/lib/nodejs-24/bin:$PATH"
 fi
 
 echo "refresh-prod-onest: restarting onest-mint-api and onest-dana-index"

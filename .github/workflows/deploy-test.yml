@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -118,9 +118,13 @@ jobs:
             ./ \
             "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
 
-          echo "Installing backend dependencies on the VM with Node 22 (WLotus keeps system Node 18)..."
+          echo "Installing backend dependencies on the VM with Node 24 (side-by-side install; system node untouched)..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            export PATH=/usr/local/lib/nodejs-22/bin:/usr/local/bin:/usr/bin:\$PATH && \
+            if [ ! -x /usr/local/lib/nodejs-24/bin/node ]; then \
+              echo '::error::Missing /usr/local/lib/nodejs-24 on the VM. Install Node 24 (see scripts/provision-test-tpaw.sh) before deploying.'; \
+              exit 1; \
+            fi && \
+            export PATH=/usr/local/lib/nodejs-24/bin:/usr/local/bin:/usr/bin:\$PATH && \
             cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
 
           echo "Updating backend code permissions..."
