@@ -241,6 +241,10 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 
 if [[ -f "$NGINX_SRC" ]]; then
   echo "provision-prod-paw: pointing onest.pet at :${MINT_PORT}/:${DANA_PORT}"
+  # Rate-limit zone used by the hardening snippet (WLotus defines its own
+  # wl_challenge zone on the test VM; the fresh prod VM needs one).
+  printf '%s\n' 'limit_req_zone $binary_remote_addr zone=wl_challenge:10m rate=10r/m;' \
+    > /etc/nginx/conf.d/onest-limits.conf
   install -m 644 "$ROOT/deploy/contabo/nginx-onest-hardening.conf" /etc/nginx/snippets/onest-hardening.conf
   install -m 644 "$NGINX_SRC" "$NGINX_DEST"
   nginx -t
@@ -255,7 +259,9 @@ npm run web:build
 WEB_DEST="${WEB_DEST:-/var/www/onest}"
 mkdir -p "$WEB_DEST"
 rsync -a --delete "$ROOT/apps/web/dist/" "$WEB_DEST/"
-chown -R deploy:deploy "$WEB_DEST" 2>/dev/null || true
+# nginx workers (www-data) must traverse and read the web root.
+chown -R deploy:www-data "$WEB_DEST" 2>/dev/null || chown -R deploy:deploy "$WEB_DEST" 2>/dev/null || true
+chmod -R u+rwX,g+rX,o+rX "$WEB_DEST"
 
 echo "provision-prod-paw: done. PAW is live on ${SITE_ORIGIN}."
 echo "TOKEN_ID=${TOKEN_ID}"
