@@ -266,16 +266,24 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && normPath === '/api/recent') {
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 40)));
-      json(res, 200, { ok: true, burns: store.recent(limit) });
+      const burns = store.recent(limit).map(b => ({
+        ...b,
+        media: social.getProfileMedia(b.originalBurnTxid),
+      }));
+      json(res, 200, { ok: true, burns });
       return;
     }
 
     if (req.method === 'GET' && normPath === '/api/trending') {
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 8)));
+      const trending = store.trending(limit).map(g => ({
+        ...g,
+        media: social.getProfileMedia(g.originalBurnTxid),
+      }));
       json(res, 200, {
         ok: true,
         gravity: TRENDING_GRAVITY,
-        trending: store.trending(limit),
+        trending,
       });
       return;
     }
