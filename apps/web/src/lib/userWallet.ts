@@ -26,6 +26,7 @@ import { bindUserProfile } from './socialApi.js';
 const DEFAULT_CHRONIK = [
   'https://chronik.e.cash',
   'https://xec.paybutton.org',
+  'https://chronik.pay2stay.com/xec',
 ];
 
 let chronikSingleton: ChronikClient | null = null;
