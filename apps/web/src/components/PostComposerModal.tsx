@@ -1,17 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
 import {
   compressImage,
   createPost,
+  mediaUrl,
   pollPostVerified,
   uploadImage,
 } from '../lib/socialApi.js';
 import { createPaidPostWithXec } from '../lib/paidPost.js';
+import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
 export interface PetOption {
   txid: string;
   name: string;
+  species?: string;
+  avatar?: string | null;
 }
 
 export function PostComposerModal(props: {
@@ -36,6 +40,15 @@ export function PostComposerModal(props: {
   const [success, setSuccess] = useState<{ postId: string; burnTxid: string; pending: boolean } | null>(
     null,
   );
+  const stripRef = useRef<HTMLDivElement | null>(null);
+
+  /* Keep the preselected pet visible when the popup opens. */
+  useEffect(() => {
+    if (!props.open) return;
+    stripRef.current
+      ?.querySelector('.pet-picker.selected')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [props.open, petTxid]);
 
   if (!props.open) return null;
 
@@ -147,17 +160,27 @@ export function PostComposerModal(props: {
             {props.pets.length > 0 ? (
               <div className="form-group">
                 <label>{t('choosePet')}</label>
-                <select
-                  value={petTxid}
-                  disabled={busy}
-                  onChange={e => setPetTxid(e.target.value)}
-                >
+                <div className="pet-picker-strip" ref={stripRef}>
                   {props.pets.map(p => (
-                    <option key={p.txid} value={p.txid}>
-                      {p.name}
-                    </option>
+                    <button
+                      key={p.txid}
+                      type="button"
+                      className={`pet-picker${p.txid === petTxid ? ' selected' : ''}`}
+                      disabled={busy}
+                      aria-pressed={p.txid === petTxid}
+                      onClick={() => setPetTxid(p.txid)}
+                    >
+                      <span className="pet-picker-avatar">
+                        {p.avatar ? (
+                          <img src={mediaUrl(p.avatar)} alt="" loading="lazy" />
+                        ) : (
+                          speciesEmoji(p.species)
+                        )}
+                      </span>
+                      <span className="pet-picker-name">{p.name}</span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             ) : (
               <div className="empty-hint-block">

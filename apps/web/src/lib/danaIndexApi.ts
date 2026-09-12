@@ -13,6 +13,8 @@ export interface IndexBurn {
   blockTimestamp: number | null;
   timeFirstSeen: string;
   burnAtoms?: string;
+  /** Artwork of the profile this burn belongs to, when uploaded. */
+  media?: ProfileMediaLinks | null;
 }
 
 export interface IndexMemorialGroup {

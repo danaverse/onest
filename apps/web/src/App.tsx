@@ -26,7 +26,10 @@ import {
   type FeedPage,
   type FeedPost,
 } from './lib/socialApi.js';
-import { profileBareNameFromNote } from '../../../src/offering/animalProfileFields.js';
+import {
+  parseAnimalProfileNote,
+  profileBareNameFromNote,
+} from '../../../src/offering/animalProfileFields.js';
 import { speciesEmoji } from './lib/petUi.js';
 
 const FEED_PAGE_SIZE = 12;
@@ -139,20 +142,43 @@ export default function App() {
   }
 
   const pets: PetOption[] = useMemo(() => {
-    const byRoot = new Map<string, string>();
+    const byRoot = new Map<string, PetOption>();
+    /* Newest profiles first: they carry name, species and artwork. */
+    for (const g of recentProfiles) {
+      const root = g.originalBurnTxid.toLowerCase();
+      const fields = parseAnimalProfileNote(g.originalNote);
+      byRoot.set(root, {
+        txid: root,
+        name: profileBareNameFromNote(g.originalNote) || `Pet ${root.slice(0, 8)}…`,
+        species: fields?.species || '',
+        avatar: g.media?.avatar ?? null,
+      });
+    }
     for (const b of recent) {
       const root = (b.originalBurnTxid || b.burnTxid).toLowerCase();
-      byRoot.set(root, profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`);
+      const prev = byRoot.get(root);
+      byRoot.set(root, {
+        txid: root,
+        name: prev?.name || profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`,
+        species: prev?.species || parseAnimalProfileNote(b.note)?.species || '',
+        avatar: prev?.avatar ?? b.media?.avatar ?? null,
+      });
     }
     for (const g of trending) {
       const root = g.originalBurnTxid.toLowerCase();
-      byRoot.set(
-        root,
-        profileBareNameFromNote(g.originalNote) || byRoot.get(root) || `Pet ${root.slice(0, 8)}…`,
-      );
+      const prev = byRoot.get(root);
+      byRoot.set(root, {
+        txid: root,
+        name:
+          prev?.name ||
+          profileBareNameFromNote(g.originalNote) ||
+          `Pet ${root.slice(0, 8)}…`,
+        species: prev?.species || parseAnimalProfileNote(g.originalNote)?.species || '',
+        avatar: prev?.avatar ?? g.media?.avatar ?? null,
+      });
     }
-    return [...byRoot.entries()].map(([txid, name]) => ({ txid, name }));
-  }, [recent, trending]);
+    return [...byRoot.values()];
+  }, [recent, trending, recentProfiles]);
 
   const petNameByRoot = useMemo(() => {
     const map = new Map<string, string>();
