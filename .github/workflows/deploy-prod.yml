@@ -1,6 +1,14 @@
 name: Deploy to Prod
 
+# Production deploys run on version tags (like WLotus):
+#   git tag prod-v1.0.0 && git push origin prod-v1.0.0
+# Pushing to main only deploys to the test VM (deploy-test.yml).
+# workflow_dispatch is kept for manual re-deploys of the tagged commit.
+
 on:
+  push:
+    tags:
+      - 'prod-v*'
   workflow_dispatch:
 
 concurrency:
@@ -14,6 +22,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log release tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "Deploying prod release ${GITHUB_REF_NAME} (commit ${GITHUB_SHA})"
+          else
+            echo "Manual prod re-deploy of ${GITHUB_SHA}"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,20 +69,25 @@ jobs:
           SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           SSH_USER: ${{ secrets.PROD_SSH_USER || 'deploy' }}
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_PASS: ${{ secrets.PROD_SSH_PASS }}
         run: |
           missing=0
           if [ -z "$SSH_HOST" ]; then
             echo "::error::Missing PROD_SSH_HOST secret."
             missing=1
           fi
-          if [ -z "$SSH_KEY" ]; then
-            echo "::error::Missing PROD_SSH_KEY secret. An SSH private key is required for passwordless deployment."
+          if [ -z "$SSH_KEY" ] && [ -z "$SSH_PASS" ]; then
+            echo "::error::Missing SSH credentials. Set PROD_SSH_KEY (private key, preferred) or PROD_SSH_PASS."
             missing=1
           fi
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
-          echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH key auth)"
+          if [ -n "$SSH_KEY" ]; then
+            echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH key auth)"
+          else
+            echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH password auth)"
+          fi
 
       - name: Deploy to Prod VM
         env:
@@ -74,6 +95,7 @@ jobs:
           SSH_USER: ${{ secrets.PROD_SSH_USER || 'deploy' }}
           SSH_PORT: ${{ secrets.PROD_SSH_PORT || '22' }}
           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_PASS: ${{ secrets.PROD_SSH_PASS }}
           WEB_DEST: ${{ vars.PROD_WEB_PATH || secrets.PROD_WEB_PATH || '/var/www/onest' }}
           REPO_DEST: ${{ vars.PROD_REPO_PATH || secrets.PROD_REPO_PATH || '/opt/onest' }}
           PROD_DESK_SEEDS: ${{ secrets.PROD_DESK_SEEDS }}
@@ -82,15 +104,23 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          # Configure SSH private key authentication
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${SSH_KEY:-}" ]; then
+            # SSH private key authentication (preferred)
+            printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            SSH_BASE="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          else
+            # Password authentication fallback
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+            export SSHPASS="$SSH_PASS"
+            SSH_BASE="sshpass -e ssh -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          fi
+
+          SSH_CMD="$SSH_BASE"
+          RSYNC_SSH="$SSH_BASE"
 
           # Add host key to known_hosts
           ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
-
-          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
-          RSYNC_SSH="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
 
           echo "Ensuring remote directories exist..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p '${WEB_DEST}' '${REPO_DEST}'"
@@ -101,8 +131,8 @@ jobs:
             apps/web/dist/ \
             "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
 
-          echo "Setting web directory permissions..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chmod -R u+rwX,g+rX '${WEB_DEST}' 2>/dev/null || true"
+          echo "Setting web directory permissions (nginx www-data must read)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chown -R deploy:www-data '${WEB_DEST}' 2>/dev/null || chown -R deploy:deploy '${WEB_DEST}' 2>/dev/null || true; chmod -R u+rwX,g+rX,o+rX '${WEB_DEST}'"
 
           echo "Syncing repository code to ${REPO_DEST}..."
           rsync -avz \
@@ -135,8 +165,9 @@ jobs:
             REPO_DEST='${REPO_DEST}' PUBLIC_SITE_ORIGIN='https://onest.pet' \
               bash '${REPO_DEST}/scripts/refresh-prod-onest.sh'"
 
-          # Clean up private key from runner
+          # Clean up credentials from runner
           rm -f ~/.ssh/deploy_key
+          unset SSHPASS SSH_PASS || true
 
           echo "Deployment complete."
 
