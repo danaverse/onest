@@ -59,17 +59,17 @@ export function ogCopy(
     switch (locale) {
       case 'vi':
         return {
-          title: `Tưởng nhớ ${n}`,
+          title: `Theo dấu chân thương của ${n}`,
           description: 'Dấu chân tưởng nhớ thú cưng yêu quý — ghi dấu vĩnh cửu.',
         };
       case 'zh':
         return {
-          title: `怀念 ${n}`,
+          title: `循着 ${n} 的爪印`,
           description: '每一枚爪印，都是爱的故事。',
         };
       default:
         return {
-          title: `In memory of ${n}`,
+          title: `Following the paw print of ${n}`,
           description: 'A loving paw-print tribute — recorded forever.',
         };
     }
