@@ -67,8 +67,8 @@ import {
   type CliOptions,
 } from '../src/params/tokenCli.js';
 
-function loadOrCreateMnemonic(envPath: string): { mnemonic: string; isNew: boolean } {
-  const fromSecret = process.env.TEST_DESK_SEEDS?.trim();
+function loadOrCreateMnemonic(envPath: string, isTest: boolean): { mnemonic: string; isNew: boolean } {
+  const fromSecret = (isTest ? process.env.TEST_DESK_SEEDS : process.env.PROD_DESK_SEEDS)?.trim();
   if (fromSecret) {
     const mnemonic = parseDeskSeed(fromSecret);
     process.env.MINT_MNEMONIC = mnemonic;
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
     wallet = Wallet.fromSk(fromHex(skHex), chronik);
     sourceDesc = 'private key (GENESIS_SK_HEX / MINT_SK_HEX)';
   } else {
-    const { mnemonic, isNew } = loadOrCreateMnemonic(envPath);
+    const { mnemonic, isNew } = loadOrCreateMnemonic(envPath, isTest);
     if (isNew) {
       console.log('\n' + '='.repeat(70));
       console.log('  GENERATED NEW GENESIS & MINT DESK MNEMONIC (12 words):');
@@ -174,8 +174,10 @@ async function main(): Promise<void> {
     wallet = Wallet.fromMnemonic(mnemonic.trim(), chronik);
     sourceDesc = isNew
       ? 'newly generated mnemonic (.env)'
-      : process.env.TEST_DESK_SEEDS?.trim()
-        ? 'TEST_DESK_SEEDS'
+      : (isTest ? process.env.TEST_DESK_SEEDS : process.env.PROD_DESK_SEEDS)?.trim()
+        ? isTest
+          ? 'TEST_DESK_SEEDS'
+          : 'PROD_DESK_SEEDS'
         : 'mnemonic from .env';
   }
 

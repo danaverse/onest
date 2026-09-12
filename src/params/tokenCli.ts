@@ -25,8 +25,11 @@ export interface ResolvedTokenConfig {
 
 /**
  * Resolve the desk/genesis mnemonic from env.
- * `TEST_DESK_SEEDS` is the Cursor/GitHub secret for the test desk; it may be a
+ * `TEST_DESK_SEEDS` is the Cursor/GitHub secret for the test desk (tPAW) and
+ * `PROD_DESK_SEEDS` is the secret for the production desk (PAW); each may be a
  * quoted phrase, a JSON string, or a JSON array (first entry wins).
+ * Pass `isTest=true` for the test desk, `false` for the production desk.
+ * Without an argument, prefers test seeds, then prod seeds, then local env.
  */
 export function parseDeskSeed(raw?: string): string {
   let s = (raw ?? '').trim();
@@ -64,9 +67,13 @@ export function parseDeskSeed(raw?: string): string {
   return phrase;
 }
 
-export function resolveDeskMnemonic(): string {
+export function resolveDeskMnemonic(isTest?: boolean): string {
+  const testSeed = process.env.TEST_DESK_SEEDS?.trim();
+  const prodSeed = process.env.PROD_DESK_SEEDS?.trim();
+  const preferred =
+    isTest === true ? testSeed : isTest === false ? prodSeed : testSeed || prodSeed;
   return parseDeskSeed(
-    process.env.TEST_DESK_SEEDS ||
+    preferred ||
       process.env.GENESIS_MNEMONIC ||
       process.env.MINT_MNEMONIC,
   );
