@@ -64,7 +64,10 @@ export default function App() {
   useEffect(() => {
     loadFeed();
     loadPosts();
-    void flushPendingProfileMedia();
+    void flushPendingProfileMedia().then(linked => {
+      /* Queued artwork recovered: refresh so avatars appear right away. */
+      if (linked > 0) loadFeed();
+    });
     checkUrlPath();
     const handlePopState = () => checkUrlPath();
     window.addEventListener('popstate', handlePopState);
