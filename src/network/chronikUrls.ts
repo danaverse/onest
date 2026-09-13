@@ -1,8 +1,10 @@
 /**
- * Public Chronik endpoints for eCash mainnet (failover order).
+ * Chronik endpoints for eCash mainnet (failover order).
+ * The project's own node comes first; public endpoints follow as fallback.
  * Prefer ClosestFirst at runtime; AsOrdered is available for deterministic tests.
  */
 export const MAINNET_CHRONIK_URLS = [
+  'https://chronik.danaverse.org/xec',
   'https://chronik.e.cash',
   'https://xec.paybutton.org',
   'https://chronik.pay2stay.com/xec',
