@@ -70,8 +70,10 @@ function New-Icon([int]$size) {
     $g.FillEllipse($badge, ($size / 2.0 - $r), ($size / 2.0 - $r), ($r * 2), ($r * 2))
     $badge.Dispose()
 
-    # Paw width is 20 viewBox units; use ~83% of the canvas like the old art.
-    Draw-Paw $g ($size / 2.0) ($size / 2.0) ($size * 0.830 / 20.0)
+    # Paw width is 20 viewBox units; use ~66% of the canvas so the paw sits
+    # small and cute inside the badge with a soft dark gap (was 0.830, which
+    # filled the badge edge to edge). Keep in sync with generate-icons.py.
+    Draw-Paw $g ($size / 2.0) ($size / 2.0) ($size * 0.660 / 20.0)
     $g.Dispose()
     return $bmp
 }
