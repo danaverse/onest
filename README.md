@@ -99,6 +99,8 @@ REPO=/opt/onest bash /opt/onest/deploy/contabo/harden-test-vm.sh
 
 This enables **fail2ban** (sshd), **unattended-upgrades**, **UFW** (22 + 80/443 only), **nginx** rate limits and security headers, binds Onest **mint-api** / **dana-index** to **127.0.0.1**, and disables **SSH password login** (key-only for `deploy` and `root`). CI and Cloud Agents must use `TEST_SSH_KEY` with user `deploy` (not `TEST_SSH_PASS` on `root`).
 
+**Locked out of SSH?** See [docs/TEST-VM-SSH-ACCESS.md](docs/TEST-VM-SSH-ACCESS.md) — download the **Setup test VM Cursor SSH key** artifact, run **Recover test VM SSH access** with your public key, or use the Contabo VNC console.
+
 ## Production Deployment (tag-triggered)
 
 Production (`https://onest.pet`, PAW mainnet) deploys only on version tags via `.github/workflows/deploy-prod.yml` — pushing to `main` never touches prod. Tag a release to ship it:
