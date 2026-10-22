@@ -1,0 +1,75 @@
+name: Recover test VM SSH access
+
+# Use when locked out after hardening (password auth off). Requires GitHub
+# TEST_SSH_KEY (CI deploy key) still authorized on the VM.
+on:
+  workflow_dispatch:
+    inputs:
+      ssh_public_key:
+        description: 'Your OpenSSH public key (single line, ssh-ed25519 AAAA... comment)'
+        required: true
+        type: string
+      unban_all_sshd:
+        description: 'Unban all fail2ban sshd jails (if your IP was blocked)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate secrets
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_KEY" ]; then
+            echo "::error::Need TEST_SSH_HOST and TEST_SSH_KEY in GitHub Actions secrets."
+            exit 1
+          fi
+          if ! printf '%s' "${{ inputs.ssh_public_key }}" | grep -qE '^ssh-(ed25519|rsa|ecdsa) '; then
+            echo "::error::ssh_public_key must be one OpenSSH public key line (starts with ssh-ed25519 or ssh-rsa)."
+            exit 1
+          fi
+
+      - name: Add key for deploy and unban fail2ban
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'deploy' }}
+          SSH_PORT: ${{ secrets.TEST_SSH_PORT || secrets.CONTABO_SSH_PORT || '22' }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+          PUBKEY: ${{ inputs.ssh_public_key }}
+          UNBAN: ${{ inputs.unban_all_sshd }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "PUBKEY=$(printf %q "$PUBKEY") UNBAN=$(printf %q "$UNBAN") bash -s" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          touch ~/.ssh/authorized_keys
+          if ! grep -qF "$PUBKEY" ~/.ssh/authorized_keys; then
+            echo "$PUBKEY" >> ~/.ssh/authorized_keys
+            echo "Added key to deploy authorized_keys"
+          else
+            echo "Key already present for deploy"
+          fi
+          chmod 600 ~/.ssh/authorized_keys
+          # fail2ban unban requires root; use Contabo console if your IP was banned.
+          if [[ "$UNBAN" == "true" ]]; then
+            echo "Note: deploy cannot unban fail2ban without root console access."
+          fi
+          wc -l ~/.ssh/authorized_keys
+          REMOTE
+          rm -f ~/.ssh/deploy_key
+
+      - name: Summary
+        run: |
+          echo "## SSH recovery" >> "$GITHUB_STEP_SUMMARY"
+          echo "Try: \`ssh deploy@${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}\` with the **private** key matching the public key you submitted." >> "$GITHUB_STEP_SUMMARY"
+          echo "Password login remains disabled; use key-only." >> "$GITHUB_STEP_SUMMARY"
