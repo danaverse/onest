@@ -5,6 +5,11 @@ name: Setup test VM Cursor SSH key
 # for pasting into the Cursor environment secret TEST_SSH_KEY.
 on:
   workflow_dispatch:
+  # One-time bootstrap when this workflow changes on main (uses existing TEST_SSH_KEY).
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/setup-test-cursor-ssh-key.yml
 
 concurrency:
   group: setup-test-cursor-ssh-key
