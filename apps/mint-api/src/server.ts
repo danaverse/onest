@@ -45,6 +45,8 @@ import {
 } from '../../../src/lib/httpJson.js';
 
 const PORT = Number(process.env.MINT_API_PORT?.trim() || 8787);
+/** Loopback-only by default; set MINT_API_BIND=0.0.0.0 for local LAN debugging. */
+const BIND = process.env.MINT_API_BIND?.trim() || '127.0.0.1';
 const STARTED_AT = new Date().toISOString();
 
 function cors(res: import('node:http').ServerResponse): void {
@@ -338,8 +340,8 @@ async function reindexRememberedRoots(): Promise<void> {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`Onest mint-api listening on :${PORT} startedAt=${STARTED_AT}`);
+server.listen(PORT, BIND, () => {
+  console.log(`Onest mint-api listening on ${BIND}:${PORT} startedAt=${STARTED_AT}`);
   startMorningReminderLoop();
   void reindexRememberedRoots().catch(err =>
     console.warn('root reindex failed:', err),

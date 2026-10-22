@@ -1,0 +1,12 @@
+# Managed by deploy/contabo/harden-test-vm.sh and provision scripts.
+# Install: install -m 440 onest-deploy.sudoers /etc/sudoers.d/onest-deploy && visudo -c
+
+deploy ALL=(root) NOPASSWD: \
+  /usr/bin/systemctl restart onest-mint-api.service, \
+  /usr/bin/systemctl restart onest-dana-index.service, \
+  /usr/bin/chown -R deploy\:deploy /opt/onest, \
+  /bin/chown -R deploy\:deploy /opt/onest, \
+  /usr/bin/nginx -t, \
+  /usr/sbin/nginx -t, \
+  /usr/bin/systemctl reload nginx, \
+  /bin/systemctl reload nginx

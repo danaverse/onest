@@ -94,6 +94,8 @@ function resolveTokenId(): string {
 }
 
 const PORT = Number(process.env.DANA_INDEX_PORT?.trim() || 8788);
+/** Loopback-only by default; set DANA_INDEX_BIND=0.0.0.0 for local LAN debugging. */
+const BIND = process.env.DANA_INDEX_BIND?.trim() || '127.0.0.1';
 const TOKEN_ID = resolveTokenId();
 const STORE_PATH =
   process.env.DANA_INDEX_STORE?.trim() ||
@@ -742,8 +744,8 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Onest dana-index listening on :${PORT} startedAt=${STARTED_AT}`);
+server.listen(PORT, BIND, () => {
+  console.log(`Onest dana-index listening on ${BIND}:${PORT} startedAt=${STARTED_AT}`);
   if (TOKEN_ID && /^[0-9a-fA-F]{64}$/.test(TOKEN_ID)) {
     void syncTokenHistory(chronik, TOKEN_ID, store, social)
       .then(r => console.log('initial sync', r))

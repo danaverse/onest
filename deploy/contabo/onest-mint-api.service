@@ -8,6 +8,7 @@ User=deploy
 WorkingDirectory=/opt/onest
 Environment=NODE_ENV=production
 Environment=MINT_API_PORT=9787
+Environment=MINT_API_BIND=127.0.0.1
 Environment=ONEST_MINT_ENV=/etc/onest/mint.env
 ExecStart=/opt/onest/deploy/contabo/run-mint-api.sh
 Restart=on-failure

@@ -217,9 +217,24 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 if [[ -f "$NGINX_SRC" ]]; then
   echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
   install -m 644 "$ROOT/deploy/contabo/nginx-onest-hardening.conf" /etc/nginx/snippets/onest-hardening.conf
+  install -m 644 "$ROOT/deploy/contabo/nginx-onest-security-headers.conf" \
+    /etc/nginx/snippets/onest-security-headers.conf
+  install -m 644 "$ROOT/deploy/contabo/nginx-onest-rate-limits.conf" \
+    /etc/nginx/conf.d/onest-rate-limits.conf
+  if [[ ! -f /etc/nginx/conf.d/wlotus-rate-limit.conf ]]; then
+    printf '%s\n' 'limit_req_zone $binary_remote_addr zone=wl_challenge:10m rate=10r/m;' \
+      > /etc/nginx/conf.d/wlotus-rate-limit.conf
+  fi
   install -m 644 "$NGINX_SRC" "$NGINX_DEST"
   nginx -t
   systemctl reload nginx
+fi
+
+if [[ -x "$ROOT/deploy/contabo/harden-test-vm.sh" ]]; then
+  echo "provision-test-tpaw: applying VM security baseline (SSH, fail2ban, loopback bind)..."
+  REPO="$ROOT" bash "$ROOT/deploy/contabo/harden-test-vm.sh" || {
+    echo "provision-test-tpaw: harden-test-vm failed (non-fatal if re-run manually as root)" >&2
+  }
 fi
 
 echo "provision-test-tpaw: rebuilding PWA with VITE_PAW_TICKER=tPAW and the live token id..."
