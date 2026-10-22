@@ -118,6 +118,11 @@ jobs:
             ./ \
             "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
 
+          echo "Ensuring ${REPO_DEST} is owned by deploy (fixes EACCES after root rsync/hardening)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            sudo -n /usr/bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || \
+            sudo -n /bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true"
+
           echo "Installing backend dependencies on the VM with Node 24 (side-by-side install; system node untouched)..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
             if [ ! -x /usr/local/lib/nodejs-24/bin/node ]; then \
@@ -126,11 +131,6 @@ jobs:
             fi && \
             export PATH=/usr/local/lib/nodejs-24/bin:/usr/local/bin:/usr/bin:\$PATH && \
             cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
-
-          echo "Updating backend code permissions..."
-          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
-            sudo -n /usr/bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || \
-            sudo -n /bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true"
 
           echo "Restarting Onest tPAW services as deploy (NOPASSWD systemctl only; do not sudo the provision script)..."
           $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
