@@ -89,6 +89,16 @@ Configure the following secrets in GitHub (**Settings → Secrets and variables 
 - `TEST_REPO_PATH`: Codebase destination on VM (default `/opt/onest`)
 - `TEST_SMOKE_URL`: Live verification URL (default `https://test.onest.pet`)
 
+### Test VM security baseline
+
+After syncing code to `/opt/onest`, run as **root** on the test VM:
+
+```bash
+REPO=/opt/onest bash /opt/onest/deploy/contabo/harden-test-vm.sh
+```
+
+This enables **fail2ban** (sshd), **unattended-upgrades**, **UFW** (22 + 80/443 only), **nginx** rate limits and security headers, binds Onest **mint-api** / **dana-index** to **127.0.0.1**, and disables **SSH password login** (key-only for `deploy` and `root`). CI and Cloud Agents must use `TEST_SSH_KEY` with user `deploy` (not `TEST_SSH_PASS` on `root`).
+
 ## Production Deployment (tag-triggered)
 
 Production (`https://onest.pet`, PAW mainnet) deploys only on version tags via `.github/workflows/deploy-prod.yml` — pushing to `main` never touches prod. Tag a release to ship it:
