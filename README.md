@@ -89,3 +89,38 @@ Configure the following secrets in GitHub (**Settings → Secrets and variables 
 - `TEST_REPO_PATH`: Codebase destination on VM (default `/opt/onest`)
 - `TEST_SMOKE_URL`: Live verification URL (default `https://test.onest.pet`)
 
+### Test VM security baseline
+
+After syncing code to `/opt/onest`, run as **root** on the test VM:
+
+```bash
+REPO=/opt/onest bash /opt/onest/deploy/contabo/harden-test-vm.sh
+```
+
+This enables **fail2ban** (sshd), **unattended-upgrades**, **UFW** (22 + 80/443 only), **nginx** rate limits and security headers, binds Onest **mint-api** / **dana-index** to **127.0.0.1**, and disables **SSH password login** (key-only for `deploy` and `root`). CI and Cloud Agents must use `TEST_SSH_KEY` with user `deploy` (not `TEST_SSH_PASS` on `root`).
+
+**Locked out of SSH?** See [docs/TEST-VM-SSH-ACCESS.md](docs/TEST-VM-SSH-ACCESS.md) — download the **Setup test VM Cursor SSH key** artifact, run **Recover test VM SSH access** with your public key, or use the Contabo VNC console.
+
+## Production Deployment (tag-triggered)
+
+Production (`https://onest.pet`, PAW mainnet) deploys only on version tags via `.github/workflows/deploy-prod.yml` — pushing to `main` never touches prod. Tag a release to ship it:
+
+```bash
+git tag prod-v1.0.0 && git push origin prod-v1.0.0
+```
+
+The workflow runs the test suite, linter, builds the PWA with the PAW token id from `deployments/mainnet-paw.json`, rsyncs code to `/opt/onest`, restarts services via `scripts/refresh-prod-onest.sh`, and smoke-checks `/api/status` for ticker `PAW`. `workflow_dispatch` is available for manual re-deploys.
+
+### Required GitHub Secrets (prod)
+
+- `PROD_SSH_HOST`: IP or domain of the prod VM
+- `PROD_SSH_KEY`: SSH private key for `deploy@prod` (preferred) — or `PROD_SSH_PASS` as password-auth fallback
+- `PROD_DESK_SEEDS`: BIP39 mnemonic for the production mint desk (PAW genesis + `/etc/onest/mint.env`)
+
+#### Optional Variables / Secrets (prod):
+- `PROD_SSH_USER`: SSH user (default `deploy`)
+- `PROD_SSH_PORT`: SSH port (default `22`)
+- `PROD_WEB_PATH`: Web root on VM (default `/var/www/onest`)
+- `PROD_REPO_PATH`: Codebase destination on VM (default `/opt/onest`)
+- `PROD_SMOKE_URL`: Live verification URL (default `https://onest.pet`)
+

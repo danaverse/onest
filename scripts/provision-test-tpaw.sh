@@ -34,15 +34,15 @@ if [[ -z "${TEST_DESK_SEEDS:-}" && -z "${MINT_MNEMONIC:-}" && -z "${GENESIS_MNEM
 fi
 
 export PATH="$ROOT/node_modules/.bin:/usr/local/bin:/usr/bin:${PATH:-}"
-if [[ ! -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  echo "provision-test-tpaw: installing Node 22 beside system Node (WLotus stays on /usr/bin/node)"
-  curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz -o /tmp/node-v22.14.0-linux-x64.tar.xz
-  mkdir -p /usr/local/lib/nodejs-22
-  tar -xJf /tmp/node-v22.14.0-linux-x64.tar.xz -C /usr/local/lib/nodejs-22 --strip-components=1
-  rm -f /tmp/node-v22.14.0-linux-x64.tar.xz
+if [[ ! -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  echo "provision-test-tpaw: installing Node 24 beside system Node (/usr/bin/node untouched)"
+  curl -fsSL https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz -o /tmp/node-v24.21.0-linux-x64.tar.xz
+  mkdir -p /usr/local/lib/nodejs-24
+  tar -xJf /tmp/node-v24.21.0-linux-x64.tar.xz -C /usr/local/lib/nodejs-24 --strip-components=1
+  rm -f /tmp/node-v24.21.0-linux-x64.tar.xz
 fi
-if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  export PATH="/usr/local/lib/nodejs-22/bin:$PATH"
+if [[ -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  export PATH="/usr/local/lib/nodejs-24/bin:$PATH"
 fi
 chmod +x "$ROOT/deploy/contabo/run-mint-api.sh" "$ROOT/deploy/contabo/run-dana-index.sh"
 
@@ -217,9 +217,24 @@ let s=""; process.stdin.on("data",d=>s+=d); process.stdin.on("end",()=>{
 if [[ -f "$NGINX_SRC" ]]; then
   echo "provision-test-tpaw: pointing test.onest.pet at :${MINT_PORT}/:${DANA_PORT} (WLotus stays on :8787/:8788)"
   install -m 644 "$ROOT/deploy/contabo/nginx-onest-hardening.conf" /etc/nginx/snippets/onest-hardening.conf
+  install -m 644 "$ROOT/deploy/contabo/nginx-onest-security-headers.conf" \
+    /etc/nginx/snippets/onest-security-headers.conf
+  install -m 644 "$ROOT/deploy/contabo/nginx-onest-rate-limits.conf" \
+    /etc/nginx/conf.d/onest-rate-limits.conf
+  if [[ ! -f /etc/nginx/conf.d/wlotus-rate-limit.conf ]]; then
+    printf '%s\n' 'limit_req_zone $binary_remote_addr zone=wl_challenge:10m rate=10r/m;' \
+      > /etc/nginx/conf.d/wlotus-rate-limit.conf
+  fi
   install -m 644 "$NGINX_SRC" "$NGINX_DEST"
   nginx -t
   systemctl reload nginx
+fi
+
+if [[ -x "$ROOT/deploy/contabo/harden-test-vm.sh" ]]; then
+  echo "provision-test-tpaw: applying VM security baseline (SSH, fail2ban, loopback bind)..."
+  REPO="$ROOT" bash "$ROOT/deploy/contabo/harden-test-vm.sh" || {
+    echo "provision-test-tpaw: harden-test-vm failed (non-fatal if re-run manually as root)" >&2
+  }
 fi
 
 echo "provision-test-tpaw: rebuilding PWA with VITE_PAW_TICKER=tPAW and the live token id..."

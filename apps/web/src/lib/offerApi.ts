@@ -1,6 +1,6 @@
 import { MINT_API_BASE, getOrCreateInstallId } from './config.js';
 
-export type BurnKind = 'memorial' | 'post' | 'vote';
+export type BurnKind = 'memorial' | 'profile' | 'post' | 'vote';
 
 export interface ChallengeOk {
   ok: true;
@@ -95,6 +95,8 @@ export async function fetchChallenge(opts: {
   postHash?: string;
   direction?: 0 | 1;
   targetType?: number;
+  creatorAddress?: string;
+  petRootTxid?: string;
 }): Promise<ChallengeOk> {
   const installId = getOrCreateInstallId();
   const res = await fetch(`${MINT_API_BASE}/api/challenge`, {
@@ -109,6 +111,8 @@ export async function fetchChallenge(opts: {
       postHash: opts.postHash,
       direction: opts.direction,
       targetType: opts.targetType,
+      creatorAddress: opts.creatorAddress,
+      petRootTxid: opts.petRootTxid,
     }),
   });
   if (!res.ok) {

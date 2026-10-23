@@ -18,7 +18,7 @@
     "create-paw-token": "tsx scripts/create-paw-token.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
     "@scure/bip39": "^2.4.0",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/jest": "^30.0.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^24.13.4",
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.10",
     "jest": "^30.5.2",
@@ -47,6 +47,8 @@
   },
   "license": "MIT",
   "overrides": {
-    "axios": "1.20.0"
+    "axios": "1.20.0",
+    "vite": "6.4.5",
+    "source-map-js": "1.2.2"
   }
 }

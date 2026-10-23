@@ -11,6 +11,13 @@ import {
   fetchProfileFee,
   type ProfileFeeInfo,
 } from '../lib/paidProfile.js';
+import {
+  associateProfileMedia,
+  compressAvatar,
+  compressBanner,
+  queueProfileMedia,
+  uploadImage,
+} from '../lib/socialApi.js';
 import { runSponsoredOffer } from '../lib/offerRunner.js';
 import { setOfferingBlocksPwaReload } from '../lib/pwaReloadGate.js';
 import { useWallet } from '../wallet/WalletContext.js';
@@ -20,6 +27,32 @@ const MIN_PROFILE_PAW = PAW_LISTING_FEE_ATOMS + 6n;
 const MIN_PROFILE_XEC_SATS = 2_000n;
 /** Flat XEC fee (2,000 sats) plus network fees for the desk-paid path. */
 const MIN_PAY_XEC_SATS = 2_500n;
+
+/**
+ * Progressive YYYY-MM-DD formatting: hyphens are inserted as digits are
+ * typed (2020 → 2020-01 → 2020-01-01) and pasted values are normalized,
+ * including space-separated dates with single-digit month/day (2020 1 1).
+ */
+function formatDateInput(raw: string): string {
+  const groups = raw.trim().split(/[^\d]+/).filter(Boolean);
+  const pastedThreeParts =
+    groups.length >= 3 &&
+    groups[0] &&
+    groups[1] &&
+    groups[2] &&
+    ((groups[1].length === 1 && groups[2].length === 1) ||
+      (groups[1].length === 2 && groups[2].length === 2));
+  if (pastedThreeParts) {
+    const year = groups[0]!.slice(0, 4);
+    const month = groups[1]!.padStart(2, '0');
+    const day = groups[2]!.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
 
 export function AnimalProfileModal(props: {
   open: boolean;
@@ -41,6 +74,18 @@ export function AnimalProfileModal(props: {
   const [err, setErr] = useState<string | null>(null);
   const [successTxid, setSuccessTxid] = useState<string | null>(null);
   const [profileFee, setProfileFee] = useState<ProfileFeeInfo | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+      if (bannerPreview) URL.revokeObjectURL(bannerPreview);
+    },
+    [avatarPreview, bannerPreview],
+  );
 
   useEffect(() => {
     if (!props.open || props.parentBurnTxid) return;
@@ -67,6 +112,8 @@ export function AnimalProfileModal(props: {
   const payMode = isCreate && unlocked && pawAtoms < MIN_PROFILE_PAW;
   const neededXec = payMode ? MIN_PAY_XEC_SATS : MIN_PROFILE_XEC_SATS;
   const xecShort = unlocked && xecSats < neededXec;
+  /** First profile can be desk-sponsored (6 PAW, ~2 min wait) when short. */
+  const sponsoredAvailable = isCreate && unlocked && xecShort;
 
   function buildProfileFields(): AnimalProfileFields {
     return {
@@ -96,6 +143,54 @@ export function AnimalProfileModal(props: {
     setErr(null);
     setProgress(null);
     setSuccessTxid(null);
+    setAvatarFile(null);
+    setBannerFile(null);
+    setAvatarPreview(null);
+    setBannerPreview(null);
+  }
+
+  function pickArtwork(kind: 'avatar' | 'banner', file: File | null) {
+    const url = file ? URL.createObjectURL(file) : null;
+    if (kind === 'avatar') {
+      setAvatarFile(file);
+      setAvatarPreview(url);
+    } else {
+      setBannerFile(file);
+      setBannerPreview(url);
+    }
+  }
+
+  /** Upload chosen artwork before the on-chain profile is created. */
+  async function uploadArtwork(): Promise<{
+    avatar?: string | null;
+    banner?: string | null;
+  }> {
+    const links: { avatar?: string | null; banner?: string | null } = {};
+    if (avatarFile) {
+      setProgress(t('uploadingPhotos'));
+      const { blob } = await compressAvatar(avatarFile);
+      links.avatar = (await uploadImage(blob)).sha256;
+    }
+    if (bannerFile) {
+      setProgress(t('uploadingPhotos'));
+      const { blob } = await compressBanner(bannerFile);
+      links.banner = (await uploadImage(blob)).sha256;
+    }
+    return links;
+  }
+
+  /** Link uploaded artwork to the new root; queue for retry when slow. */
+  async function linkArtwork(
+    txid: string,
+    links: { avatar?: string | null; banner?: string | null },
+  ) {
+    if (links.avatar === undefined && links.banner === undefined) return;
+    setProgress(t('associatingPhotos'));
+    try {
+      await associateProfileMedia(txid, links);
+    } catch {
+      queueProfileMedia({ txid, ...links });
+    }
   }
 
   function handleClose() {
@@ -149,11 +244,13 @@ export function AnimalProfileModal(props: {
     setSuccessTxid(null);
     setOfferingBlocksPwaReload(true);
     try {
+      const links = await uploadArtwork();
       setProgress(t('creatingProfileWallet'));
       const { txid } = await createPetProfileWithWallet({
         wallet: userWallet.wallet,
         fields: buildProfileFields(),
       });
+      await linkArtwork(txid, links);
       setSuccessTxid(txid);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Error creating profile');
@@ -176,12 +273,14 @@ export function AnimalProfileModal(props: {
     setProgress(null);
     setOfferingBlocksPwaReload(true);
     try {
+      const links = await uploadArtwork();
       const note = encodeAnimalProfileNote(buildProfileFields());
       const { burnTxid } = await createPaidProfileWithXec({
         wallet: userWallet.wallet,
         note,
         onProgress: setProgress,
       });
+      await linkArtwork(burnTxid, links);
       setSuccessTxid(burnTxid);
       await userWallet.refresh();
     } catch (e) {
@@ -216,9 +315,41 @@ export function AnimalProfileModal(props: {
     }
   }
 
+  /** Desk-sponsored first profile: 6 PAW burn after the server-enforced wait. */
+  async function handleSponsoredProfile() {
+    if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
+      setErr(t('userProfileRequired'));
+      props.onRequestWallet?.();
+      return;
+    }
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    setSuccessTxid(null);
+    setOfferingBlocksPwaReload(true);
+    try {
+      const links = await uploadArtwork();
+      const note = encodeAnimalProfileNote(buildProfileFields());
+      const result = await runSponsoredOffer({
+        kind: 'profile',
+        note,
+        creatorAddress: userWallet.wallet.address,
+        onProgress: setProgress,
+      });
+      await linkArtwork(result.burnTxid, links);
+      setSuccessTxid(result.burnTxid);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Error creating profile');
+    } finally {
+      setOfferingBlocksPwaReload(false);
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
   return (
     <div className="modal-backdrop" onClick={busy ? undefined : handleClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div className="modal-content profile-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{successTxid ? t('tributeSuccess') : props.parentBurnTxid ? t('pawTribute') : t('newProfile')}</h2>
           {!busy && <button type="button" className="btn-close" onClick={handleClose}>&times;</button>}
@@ -296,9 +427,10 @@ export function AnimalProfileModal(props: {
                     <label>{t('birthDate')}</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       disabled={busy}
                       value={birthDate}
-                      onChange={e => setBirthDate(e.target.value)}
+                      onChange={e => setBirthDate(formatDateInput(e.target.value))}
                       placeholder="YYYY-MM-DD"
                     />
                   </div>
@@ -306,12 +438,47 @@ export function AnimalProfileModal(props: {
                     <label>{t('passingDate')}</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       disabled={busy}
                       value={passingDate}
-                      onChange={e => setPassingDate(e.target.value)}
+                      onChange={e => setPassingDate(formatDateInput(e.target.value))}
                       placeholder="YYYY-MM-DD"
                     />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('avatar')}</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={e => pickArtwork('avatar', e.target.files?.[0] ?? null)}
+                  />
+                  {avatarPreview && (
+                    <img
+                      className="artwork-preview artwork-preview--avatar"
+                      src={avatarPreview}
+                      alt=""
+                    />
+                  )}
+                </div>
+
+                <div className="form-group">
+                  <label>{t('banner')}</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={e => pickArtwork('banner', e.target.files?.[0] ?? null)}
+                  />
+                  {bannerPreview && (
+                    <img
+                      className="artwork-preview artwork-preview--banner"
+                      src={bannerPreview}
+                      alt=""
+                    />
+                  )}
                 </div>
               </>
             ) : (
@@ -340,10 +507,19 @@ export function AnimalProfileModal(props: {
                 <p>
                   {!unlocked
                     ? t('userProfileRequired')
-                    : t('needXecForProfile')}
+                    : t('sponsoredProfileHint')}
                 </p>
                 {userWallet.address && (
                   <code className="wallet-address">{userWallet.address}</code>
+                )}
+                {sponsoredAvailable && (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => void handleSponsoredProfile()}
+                  >
+                    {t('sponsoredProfileButton')}
+                  </button>
                 )}
                 <button
                   type="button"

@@ -1,0 +1,79 @@
+name: Setup test VM Cursor SSH key
+
+# Generates an ed25519 key *on the test VM*, appends the public key to
+# deploy@authorized_keys, and uploads the private key as a one-time artifact
+# for pasting into the Cursor environment secret TEST_SSH_KEY.
+on:
+  workflow_dispatch:
+  # One-time bootstrap when this workflow changes on main (uses existing TEST_SSH_KEY).
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/setup-test-cursor-ssh-key.yml
+
+concurrency:
+  group: setup-test-cursor-ssh-key
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deployment secrets
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_KEY" ]; then
+            echo "::error::Need TEST_SSH_HOST and TEST_SSH_KEY (existing deploy key) to reach the VM."
+            exit 1
+          fi
+
+      - name: Generate Cursor key on VM and fetch private half
+        env:
+          SSH_HOST: ${{ secrets.TEST_SSH_HOST || secrets.CONTABO_HOST }}
+          SSH_USER: ${{ secrets.TEST_SSH_USER || secrets.CONTABO_USER || 'deploy' }}
+          SSH_PORT: ${{ secrets.TEST_SSH_PORT || secrets.CONTABO_SSH_PORT || '22' }}
+          SSH_KEY: ${{ secrets.TEST_SSH_KEY || secrets.CONTABO_SSH_PRIVATE_KEY || secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          SSH_CMD="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" 'bash -s' <<'REMOTE' > "$RUNNER_TEMP/onest_cursor_cloud.pem"
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          KEY="${HOME}/.ssh/onest_cursor_cloud"
+          if [[ ! -f "$KEY" ]]; then
+            ssh-keygen -q -t ed25519 -N "" -f "$KEY" -C "cursor-onest-cloud"
+          fi
+          PUB="$(cat "${KEY}.pub")"
+          AUTH="${HOME}/.ssh/authorized_keys"
+          touch "$AUTH"
+          if ! grep -qF "$PUB" "$AUTH" 2>/dev/null; then
+            echo "$PUB" >> "$AUTH"
+          fi
+          chmod 600 "$KEY" "$AUTH"
+          chmod 644 "${KEY}.pub"
+          cat "$KEY"
+          REMOTE
+          rm -f ~/.ssh/deploy_key
+          echo "Private key bytes: $(wc -c < "$RUNNER_TEMP/onest_cursor_cloud.pem")"
+
+      - name: Upload private key artifact (download once, add to Cursor env)
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-vm-cursor-ssh-private-key
+          path: ${{ runner.temp }}/onest_cursor_cloud.pem
+          retention-days: 2
+
+      - name: Summary
+        run: |
+          echo "## Cursor TEST_SSH_KEY" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download artifact **test-vm-cursor-ssh-private-key**, open \`onest_cursor_cloud.pem\`, and paste the full PEM into your **Cursor environment** secret \`TEST_SSH_KEY\` (user \`deploy\`, host from \`TEST_SSH_HOST\`)." >> "$GITHUB_STEP_SUMMARY"
+          echo "GitHub Actions can keep using the existing \`TEST_SSH_KEY\`; this adds a second authorized key on the VM." >> "$GITHUB_STEP_SUMMARY"

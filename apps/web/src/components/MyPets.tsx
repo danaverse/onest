@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
 import { getOrCreateInstallId } from '../lib/config.js';
-import { fetchMyPets, type MyPetSummary } from '../lib/socialApi.js';
+import { fetchMyPets, mediaUrl, type MyPetSummary } from '../lib/socialApi.js';
 import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
@@ -149,10 +149,16 @@ export function MyPets(props: {
               className="profile-card clickable"
               onClick={() => props.onOpenPet(p.txid)}
             >
-              <div className="card-top">
-                <span className="page-chip-avatar">{speciesEmoji(p.species)}</span>
-                <h3>{p.name}</h3>
-              </div>
+                      <div className="card-top">
+                        <span className="page-chip-avatar">
+                          {p.avatar ? (
+                            <img src={mediaUrl(p.avatar)} alt="" loading="lazy" />
+                          ) : (
+                            speciesEmoji(p.species)
+                          )}
+                        </span>
+                        <h3>{p.name}</h3>
+                      </div>
               <p className="tribute-count">
                 🐾 {p.tributes} tribute{p.tributes > 1 ? 's' : ''}
               </p>

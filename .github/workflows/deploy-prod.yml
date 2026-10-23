@@ -1,0 +1,202 @@
+name: Deploy to Prod
+
+# Production deploys run on version tags (like WLotus):
+#   git tag prod-v1.0.0 && git push origin prod-v1.0.0
+# Pushing to main only deploys to the test VM (deploy-test.yml).
+# workflow_dispatch is kept for manual re-deploys of the tagged commit.
+
+on:
+  push:
+    tags:
+      - 'prod-v*'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  prod-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log release tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "Deploying prod release ${GITHUB_REF_NAME} (commit ${GITHUB_SHA})"
+          else
+            echo "Manual prod re-deploy of ${GITHUB_SHA}"
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Build packages and web app
+        env:
+          VITE_PUBLIC_SITE_ORIGIN: ${{ vars.PROD_SITE_ORIGIN || 'https://onest.pet' }}
+          VITE_PAW_TOKEN_ID: ${{ vars.PROD_PAW_TOKEN_ID || secrets.PROD_PAW_TOKEN_ID || '' }}
+          VITE_PAW_TICKER: PAW
+        run: |
+          if [ -z "$VITE_PAW_TOKEN_ID" ] && [ -f deployments/mainnet-paw.json ]; then
+            VITE_PAW_TOKEN_ID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('deployments/mainnet-paw.json','utf8')).tokenId || '')")"
+            export VITE_PAW_TOKEN_ID
+            echo "Using PAW token id from deployments/mainnet-paw.json"
+          fi
+          if [ -z "$VITE_PAW_TOKEN_ID" ]; then
+            echo "::error::Missing PROD_PAW_TOKEN_ID and deployments/mainnet-paw.json. Cannot build the prod PWA."
+            exit 1
+          fi
+          npm run build
+          npm run web:build
+
+      - name: Check required deployment secrets
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER || 'deploy' }}
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_PASS: ${{ secrets.PROD_SSH_PASS }}
+        run: |
+          missing=0
+          if [ -z "$SSH_HOST" ]; then
+            echo "::error::Missing PROD_SSH_HOST secret."
+            missing=1
+          fi
+          if [ -z "$SSH_KEY" ] && [ -z "$SSH_PASS" ]; then
+            echo "::error::Missing SSH credentials. Set PROD_SSH_KEY (private key, preferred) or PROD_SSH_PASS."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          if [ -n "$SSH_KEY" ]; then
+            echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH key auth)"
+          else
+            echo "Deployment target: ${SSH_USER}@${SSH_HOST} (SSH password auth)"
+          fi
+
+      - name: Deploy to Prod VM
+        env:
+          SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          SSH_USER: ${{ secrets.PROD_SSH_USER || 'deploy' }}
+          SSH_PORT: ${{ secrets.PROD_SSH_PORT || '22' }}
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          SSH_PASS: ${{ secrets.PROD_SSH_PASS }}
+          WEB_DEST: ${{ vars.PROD_WEB_PATH || secrets.PROD_WEB_PATH || '/var/www/onest' }}
+          REPO_DEST: ${{ vars.PROD_REPO_PATH || secrets.PROD_REPO_PATH || '/opt/onest' }}
+          PROD_DESK_SEEDS: ${{ secrets.PROD_DESK_SEEDS }}
+          SOFT_WAIT: ${{ vars.MINT_MIN_PRAY_SECONDS || '54' }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          if [ -n "${SSH_KEY:-}" ]; then
+            # SSH private key authentication (preferred)
+            printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            SSH_BASE="ssh -i ~/.ssh/deploy_key -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          else
+            # Password authentication fallback
+            sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+            export SSHPASS="$SSH_PASS"
+            SSH_BASE="sshpass -e ssh -p ${SSH_PORT} -o StrictHostKeyChecking=accept-new"
+          fi
+
+          SSH_CMD="$SSH_BASE"
+          RSYNC_SSH="$SSH_BASE"
+
+          # Add host key to known_hosts
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          echo "Ensuring remote directories exist..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "mkdir -p '${WEB_DEST}' '${REPO_DEST}'"
+
+          echo "Deploying web app assets to ${WEB_DEST}..."
+          rsync -avz --delete \
+            -e "${RSYNC_SSH}" \
+            apps/web/dist/ \
+            "${SSH_USER}@${SSH_HOST}:${WEB_DEST}/"
+
+          echo "Setting web directory permissions (nginx www-data must read)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "chown -R deploy:www-data '${WEB_DEST}' 2>/dev/null || chown -R deploy:deploy '${WEB_DEST}' 2>/dev/null || true; chmod -R u+rwX,g+rX,o+rX '${WEB_DEST}'"
+
+          echo "Syncing repository code to ${REPO_DEST}..."
+          rsync -avz \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude 'data' \
+            --exclude 'dist' \
+            --exclude 'apps/web/dist' \
+            -e "${RSYNC_SSH}" \
+            ./ \
+            "${SSH_USER}@${SSH_HOST}:${REPO_DEST}/"
+
+          echo "Installing backend dependencies on the VM with Node 24..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            if [ ! -x /usr/local/lib/nodejs-24/bin/node ]; then \
+              echo '::error::Missing /usr/local/lib/nodejs-24 on the VM. Install Node 24 (see scripts/provision-prod-paw.sh) before deploying.'; \
+              exit 1; \
+            fi && \
+            export PATH=/usr/local/lib/nodejs-24/bin:/usr/local/bin:/usr/bin:\$PATH && \
+            cd '${REPO_DEST}' && npm ci --no-audit --no-fund"
+
+          echo "Updating backend code permissions..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            sudo -n /usr/bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || \
+            sudo -n /bin/chown -R deploy:deploy '${REPO_DEST}' 2>/dev/null || true"
+
+          echo "Restarting Onest PAW services as deploy (NOPASSWD systemctl only; do not sudo the provision script)..."
+          $SSH_CMD "${SSH_USER}@${SSH_HOST}" "\
+            chmod +x '${REPO_DEST}/scripts/refresh-prod-onest.sh' '${REPO_DEST}/deploy/contabo/run-mint-api.sh' '${REPO_DEST}/deploy/contabo/run-dana-index.sh' && \
+            REPO_DEST='${REPO_DEST}' PUBLIC_SITE_ORIGIN='https://onest.pet' \
+              bash '${REPO_DEST}/scripts/refresh-prod-onest.sh'"
+
+          # Clean up credentials from runner
+          rm -f ~/.ssh/deploy_key
+          unset SSHPASS SSH_PASS || true
+
+          echo "Deployment complete."
+
+      - name: Verify Live Deployment (Smoke Check)
+        env:
+          SMOKE_URL: ${{ vars.PROD_SMOKE_URL || secrets.PROD_SMOKE_URL || 'https://onest.pet' }}
+        run: |
+          echo "Running smoke check against ${SMOKE_URL}..."
+          for i in {1..8}; do
+            html_ok=0
+            api_ok=0
+            if curl -fsSL --retry 2 --retry-delay 2 "${SMOKE_URL}" | grep -q "Loving Animal Memories"; then
+              html_ok=1
+            fi
+            status="$(curl -fsSL --retry 2 --retry-delay 2 "${SMOKE_URL}/api/status" || true)"
+            ticker="$(printf '%s' "$status" | sed -n 's/.*"ticker":"\([^"]*\)".*/\1/p')"
+            if printf '%s' "$status" | grep -q 'wlotus-mint-api\|"ticker":"WLOTUS"'; then
+              echo "::error::onest.pet is still serving WLotus. Abort."
+              exit 1
+            fi
+            if [ "$ticker" = "PAW" ]; then
+              api_ok=1
+            fi
+            if [ "$html_ok" -eq 1 ] && [ "$api_ok" -eq 1 ]; then
+              echo "Smoke check passed: ${SMOKE_URL} is live on PAW."
+              exit 0
+            fi
+            echo "Waiting for live update... ($i/8) html_ok=$html_ok ticker=${ticker:-none}"
+            sleep 5
+          done
+          echo "::error::Smoke check failed: expected Onest HTML + /api/status ticker PAW at ${SMOKE_URL}"
+          exit 1

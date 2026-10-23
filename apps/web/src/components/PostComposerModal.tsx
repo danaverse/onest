@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocale } from '../i18n/LocaleContext.js';
 import {
   compressImage,
   createPost,
+  mediaUrl,
   pollPostVerified,
   uploadImage,
 } from '../lib/socialApi.js';
-import { createPaidPostWithXec } from '../lib/paidPost.js';
+import {
+  createPaidPostWithXec,
+  createPostWithPaw,
+  fetchPostFee,
+  MIN_POST_PAW_XEC_SATS,
+  OTHER_PET_POST_PAW_ATOMS,
+} from '../lib/paidPost.js';
+import { runSponsoredOffer } from '../lib/offerRunner.js';
+import { speciesEmoji } from '../lib/petUi.js';
 import { useWallet } from '../wallet/WalletContext.js';
 
 export interface PetOption {
   txid: string;
   name: string;
+  species?: string;
+  avatar?: string | null;
+  /** True when this install/wallet created the pet profile. */
+  isOwn?: boolean;
+  /** Creator wallet of the pet root (receives the other-pet post reward). */
+  creatorAddress?: string | null;
 }
 
 export function PostComposerModal(props: {
@@ -36,8 +51,56 @@ export function PostComposerModal(props: {
   const [success, setSuccess] = useState<{ postId: string; burnTxid: string; pending: boolean } | null>(
     null,
   );
+  const [postFeeSats, setPostFeeSats] = useState<bigint | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+
+  /* Keep the preselected pet visible when the popup opens. */
+  useEffect(() => {
+    if (!props.open) return;
+    stripRef.current
+      ?.querySelector('.pet-picker.selected')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [props.open, petTxid]);
+
+  /* Post fee decides paid vs desk-sponsored (1 atom, ~1 min wait). */
+  useEffect(() => {
+    if (!props.open) return;
+    let cancelled = false;
+    fetchPostFee()
+      .then(fee => {
+        if (!cancelled) setPostFeeSats(BigInt(fee.xecSats));
+      })
+      .catch(() => {
+        if (!cancelled) setPostFeeSats(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.open]);
 
   if (!props.open) return null;
+
+  const xecSats = userWallet.balances?.xecSats ?? 0n;
+  const pawAtoms = userWallet.balances?.pawAtoms ?? 0n;
+  const selectedPet = props.pets.find(p => p.txid === petTxid);
+  const isOwnPet = selectedPet?.isOwn === true;
+  const creatorAddress = selectedPet?.creatorAddress ?? null;
+  const canPayXec = postFeeSats != null && xecSats >= postFeeSats + 500n;
+  /** Other pets: 1 PAW stamp burned + 1 PAW sent to the creator. */
+  const usePaw =
+    !isOwnPet &&
+    !!creatorAddress &&
+    pawAtoms >= OTHER_PET_POST_PAW_ATOMS &&
+    xecSats >= MIN_POST_PAW_XEC_SATS;
+  /** Desk-sponsored posts are only for the user's own pets. */
+  const sponsoredAvailable =
+    userWallet.status === 'unlocked' && isOwnPet && postFeeSats != null && !canPayXec;
+  const blocked =
+    userWallet.status === 'unlocked' &&
+    postFeeSats != null &&
+    !sponsoredAvailable &&
+    !canPayXec &&
+    !usePaw;
 
   function resetForm() {
     setCaption('');
@@ -57,7 +120,7 @@ export function PostComposerModal(props: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || !petTxid || !caption.trim()) return;
+    if (busy || blocked || !petTxid || !caption.trim()) return;
     if (userWallet.status !== 'unlocked' || !userWallet.wallet) {
       setErr(t('userProfileRequired'));
       props.onRequestWallet?.();
@@ -84,17 +147,38 @@ export function PostComposerModal(props: {
         createdAt: Date.now(),
       });
 
-      const result = await createPaidPostWithXec({
-        wallet: userWallet.wallet,
-        contentHash: created.contentHash,
-        onProgress: setProgress,
-      });
+      const burnTxid = sponsoredAvailable
+        ? (
+            await runSponsoredOffer({
+              kind: 'post',
+              contentHash: created.contentHash,
+              petRootTxid: petTxid,
+              onProgress: setProgress,
+            })
+          ).burnTxid
+        : usePaw
+          ? (
+              await createPostWithPaw({
+                wallet: userWallet.wallet,
+                contentHash: created.contentHash,
+                creatorAddress: creatorAddress ?? undefined,
+                onProgress: setProgress,
+              })
+            ).burnTxid
+          : (
+              await createPaidPostWithXec({
+                wallet: userWallet.wallet,
+                contentHash: created.contentHash,
+                petRootTxid: petTxid,
+                onProgress: setProgress,
+              })
+            ).burnTxid;
 
       setProgress(t('verifyingPost'));
       const verified = await pollPostVerified(created.id);
       setSuccess({
         postId: created.id,
-        burnTxid: result.burnTxid,
+        burnTxid,
         pending: !verified,
       });
     } catch (e) {
@@ -147,17 +231,27 @@ export function PostComposerModal(props: {
             {props.pets.length > 0 ? (
               <div className="form-group">
                 <label>{t('choosePet')}</label>
-                <select
-                  value={petTxid}
-                  disabled={busy}
-                  onChange={e => setPetTxid(e.target.value)}
-                >
+                <div className="pet-picker-strip" ref={stripRef}>
                   {props.pets.map(p => (
-                    <option key={p.txid} value={p.txid}>
-                      {p.name}
-                    </option>
+                    <button
+                      key={p.txid}
+                      type="button"
+                      className={`pet-picker${p.txid === petTxid ? ' selected' : ''}`}
+                      disabled={busy}
+                      aria-pressed={p.txid === petTxid}
+                      onClick={() => setPetTxid(p.txid)}
+                    >
+                      <span className="pet-picker-avatar">
+                        {p.avatar ? (
+                          <img src={mediaUrl(p.avatar)} alt="" loading="lazy" />
+                        ) : (
+                          speciesEmoji(p.species)
+                        )}
+                      </span>
+                      <span className="pet-picker-name">{p.name}</span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             ) : (
               <div className="empty-hint-block">
@@ -201,7 +295,17 @@ export function PostComposerModal(props: {
 
             {err && <div className="error-box">{err}</div>}
             {progress && <div className="status-box">{progress}</div>}
-            {!busy && <p className="pow-hint">{t('postFeeHint')}</p>}
+            {!busy && (
+              <p className="pow-hint">
+                {blocked
+                  ? t('postNeedPawOrXec')
+                  : sponsoredAvailable
+                    ? t('sponsoredPostHint')
+                    : usePaw
+                      ? t('postOtherPetHint')
+                      : t('postFeeHint')}
+              </p>
+            )}
 
             <div className="modal-actions">
               <button type="button" disabled={busy} onClick={handleClose} className="btn-secondary">
@@ -209,10 +313,16 @@ export function PostComposerModal(props: {
               </button>
               <button
                 type="submit"
-                disabled={busy || !petTxid || !caption.trim()}
+                disabled={busy || blocked || !petTxid || !caption.trim()}
                 className="btn-primary"
               >
-                {busy ? t('posting') : t('postSubmit')}
+                {busy
+                  ? t('posting')
+                  : sponsoredAvailable
+                    ? t('sponsoredPostButton')
+                    : usePaw
+                      ? t('postPawButton')
+                      : t('postSubmit')}
               </button>
             </div>
           </form>

@@ -4,9 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export PATH="$ROOT/node_modules/.bin:/usr/local/bin:/usr/bin:${PATH:-}"
-# Onest needs Node >=20 (better-sqlite3 13 + Vite 6). Keep /usr/bin/node at 18 for WLotus.
-if [[ -x /usr/local/lib/nodejs-22/bin/node ]]; then
-  export PATH="/usr/local/lib/nodejs-22/bin:$PATH"
+# Onest needs Node 24 (matches WLotus). Side-by-side install; /usr/bin/node is untouched.
+if [[ -x /usr/local/lib/nodejs-24/bin/node ]]; then
+  export PATH="/usr/local/lib/nodejs-24/bin:$PATH"
+fi
+NODE_MAJOR="$(node -v 2>/dev/null | sed 's/^v//; s/\..*//')"
+if ! [[ "$NODE_MAJOR" =~ ^[0-9]+$ ]] || [[ "$NODE_MAJOR" -lt 24 ]]; then
+  echo "onest dana-index: Node >=24 required, found $(node -v 2>/dev/null || echo none) ($(command -v node || echo no-node))" >&2
+  echo "Fix: install Node 24 at /usr/local/lib/nodejs-24 (see scripts/provision-test-tpaw.sh)" >&2
+  exit 1
 fi
 
 TSX="$ROOT/node_modules/.bin/tsx"

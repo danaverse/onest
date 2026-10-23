@@ -2,7 +2,7 @@
 /**
  * Onest PAW Mint API server.
  *
- *   POST /api/challenge  { installId, note?, parentBurnTxid? }
+ *   POST /api/challenge  { installId, kind?, note?, parentBurnTxid?, contentHash?, postHash?, creatorAddress? }
  *   POST /api/submit     { installId, challengeId, nonceHex, powMs?, powAttempts? }
  *   POST /api/burn       { installId, remintTxid, burnToken }
  *   POST /api/cancel     { installId, challengeId?, remintTxid?, burnToken? }
@@ -45,6 +45,8 @@ import {
 } from '../../../src/lib/httpJson.js';
 
 const PORT = Number(process.env.MINT_API_PORT?.trim() || 8787);
+/** Loopback-only by default; set MINT_API_BIND=0.0.0.0 for local LAN debugging. */
+const BIND = process.env.MINT_API_BIND?.trim() || '127.0.0.1';
 const STARTED_AT = new Date().toISOString();
 
 function cors(res: import('node:http').ServerResponse): void {
@@ -137,6 +139,8 @@ const server = createServer(async (req, res) => {
         address: String(body.address || ''),
         paymentTxid: String(body.paymentTxid || ''),
         contentHash: String(body.contentHash || ''),
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, result);
       return;
@@ -252,6 +256,10 @@ const server = createServer(async (req, res) => {
         postHash: typeof body.postHash === 'string' ? body.postHash : undefined,
         direction: body.direction,
         targetType: body.targetType,
+        creatorAddress:
+          typeof body.creatorAddress === 'string' ? body.creatorAddress : undefined,
+        petRootTxid:
+          typeof body.petRootTxid === 'string' ? body.petRootTxid : undefined,
       });
       json(res, 200, challenge);
       return;
@@ -332,8 +340,8 @@ async function reindexRememberedRoots(): Promise<void> {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`Onest mint-api listening on :${PORT} startedAt=${STARTED_AT}`);
+server.listen(PORT, BIND, () => {
+  console.log(`Onest mint-api listening on ${BIND}:${PORT} startedAt=${STARTED_AT}`);
   startMorningReminderLoop();
   void reindexRememberedRoots().catch(err =>
     console.warn('root reindex failed:', err),

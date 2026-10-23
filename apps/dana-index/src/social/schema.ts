@@ -128,5 +128,17 @@ export const users = sqliteTable(
   t => [index('users_address_idx').on(t.address)],
 );
 
+/**
+ * Pet profile artwork: avatar/banner keys for an on-chain profile root.
+ * The bytes live in the content-addressed media store; this table links
+ * the root burn to the uploaded sha256 keys (both optional).
+ */
+export const profileMedia = sqliteTable('profile_media', {
+  petRootTxid: text('pet_root_txid').primaryKey(),
+  avatarSha256: text('avatar_sha256').references(() => media.sha256),
+  bannerSha256: text('banner_sha256').references(() => media.sha256),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 // FTS5 mirror of post captions lives in the generated migration as raw SQL
 // (drizzle-kit does not model virtual tables); queries use `sqlite.prepare`.

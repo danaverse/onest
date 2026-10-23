@@ -8,6 +8,7 @@ import {
   parseAnimalProfileNote,
   profileBareNameFromNote,
 } from '../../../../src/offering/animalProfileFields.js';
+import { profileShareUrl } from '../lib/shareLink.js';
 import { BrandMark } from './BrandMark.js';
 
 function speciesEmoji(species: string): string {
@@ -34,7 +35,7 @@ export function MemorialDetailModal(props: {
   onLeaveTribute: (rootTxid: string) => void;
   onLeavePost?: (rootTxid: string, petName: string) => void;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [memorial, setMemorial] = useState<IndexMemorialGroup | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -75,7 +76,11 @@ export function MemorialDetailModal(props: {
 
   async function handleShare() {
     if (!memorial) return;
-    const shareUrl = `${window.location.origin}/${memorial.originalBurnTxid}`;
+    const shareUrl = profileShareUrl(
+      memorial.originalBurnTxid,
+      undefined,
+      locale,
+    );
     try {
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);

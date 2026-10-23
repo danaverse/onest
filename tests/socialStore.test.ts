@@ -229,6 +229,52 @@ describe('SocialStore', () => {
     }
   });
 
+  it('links avatar and banner media to a profile root', () => {
+    const { store, close } = freshStore();
+    try {
+      const avatarSha = 'a1'.repeat(32);
+      const bannerSha = 'c3'.repeat(32);
+      store.insertMedia({
+        sha256: avatarSha,
+        mime: 'image/jpeg',
+        bytes: 256,
+        objectKey: avatarSha,
+        createdAt: Date.now(),
+      });
+      store.insertMedia({
+        sha256: bannerSha,
+        mime: 'image/jpeg',
+        bytes: 512,
+        objectKey: bannerSha,
+        createdAt: Date.now(),
+      });
+
+      expect(store.getProfileMedia(PET_ROOT)).toBeNull();
+
+      expect(
+        store.setProfileMedia({ petRootTxid: PET_ROOT, avatarSha256: avatarSha }),
+      ).toEqual({ avatar: avatarSha, banner: null });
+
+      /* Omitted fields keep their value; explicit null clears one. */
+      expect(
+        store.setProfileMedia({ petRootTxid: PET_ROOT, bannerSha256: bannerSha }),
+      ).toEqual({ avatar: avatarSha, banner: bannerSha });
+      expect(
+        store.setProfileMedia({ petRootTxid: PET_ROOT.toUpperCase(), avatarSha256: null }),
+      ).toEqual({ avatar: null, banner: bannerSha });
+
+      const batch = store.profileMediaFor([PET_ROOT, 'ff'.repeat(32)]);
+      expect(batch.get(PET_ROOT.toLowerCase())).toEqual({
+        avatar: null,
+        banner: bannerSha,
+      });
+      expect(batch.size).toBe(1);
+      expect(store.profileMediaFor([]).size).toBe(0);
+    } finally {
+      close();
+    }
+  });
+
   it('persists the ingest cursor', () => {
     const { sqlite, db } = openSocialDb(':memory:');
     const store = new SocialStore(sqlite, db);

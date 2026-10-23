@@ -20,18 +20,26 @@ import {
   type IndexBurn,
   type IndexMemorialGroup,
 } from './lib/danaIndexApi.js';
+import { getOrCreateInstallId } from './lib/config.js';
 import {
   fetchFeed,
+  flushPendingProfileMedia,
   type FeedPage,
   type FeedPost,
 } from './lib/socialApi.js';
-import { profileBareNameFromNote } from '../../../src/offering/animalProfileFields.js';
+import {
+  parseAnimalProfileNote,
+  profileBareNameFromNote,
+} from '../../../src/offering/animalProfileFields.js';
 import { speciesEmoji } from './lib/petUi.js';
+import { useWallet } from './wallet/WalletContext.js';
 
 const FEED_PAGE_SIZE = 12;
 
 export default function App() {
   const { t } = useLocale();
+  const { address: walletAddress } = useWallet();
+  const installId = useMemo(() => getOrCreateInstallId(), []);
   const [route, setRoute] = useState<{ name: 'home' } | { name: 'pet'; txid: string }>({
     name: 'home',
   });
@@ -60,6 +68,10 @@ export default function App() {
   useEffect(() => {
     loadFeed();
     loadPosts();
+    void flushPendingProfileMedia().then(linked => {
+      /* Queued artwork recovered: refresh so avatars appear right away. */
+      if (linked > 0) loadFeed();
+    });
     checkUrlPath();
     const handlePopState = () => checkUrlPath();
     window.addEventListener('popstate', handlePopState);
@@ -137,20 +149,67 @@ export default function App() {
   }
 
   const pets: PetOption[] = useMemo(() => {
-    const byRoot = new Map<string, string>();
+    const owns = (burn: IndexBurn | undefined): boolean => {
+      if (!burn) return false;
+      if (burn.creatorInstallId && burn.creatorInstallId === installId) return true;
+      if (!walletAddress) return false;
+      const addr = walletAddress.toLowerCase();
+      return (
+        (burn.creatorAddress || '').toLowerCase() === addr ||
+        (burn.senderAddress || '').toLowerCase() === addr
+      );
+    };
+    const rootBurnOf = (g: IndexMemorialGroup): IndexBurn | undefined =>
+      g.burns.find(
+        b => b.burnTxid.toLowerCase() === g.originalBurnTxid.toLowerCase(),
+      ) ?? g.burns[0];
+    const creatorOf = (burn: IndexBurn | undefined): string | null =>
+      (burn?.creatorAddress || burn?.senderAddress || '').toLowerCase() || null;
+    const byRoot = new Map<string, PetOption>();
+    /* Newest profiles first: they carry name, species and artwork. */
+    for (const g of recentProfiles) {
+      const root = g.originalBurnTxid.toLowerCase();
+      const fields = parseAnimalProfileNote(g.originalNote);
+      const rootBurn = rootBurnOf(g);
+      byRoot.set(root, {
+        txid: root,
+        name: profileBareNameFromNote(g.originalNote) || `Pet ${root.slice(0, 8)}…`,
+        species: fields?.species || '',
+        avatar: g.media?.avatar ?? null,
+        isOwn: owns(rootBurn),
+        creatorAddress: creatorOf(rootBurn),
+      });
+    }
     for (const b of recent) {
       const root = (b.originalBurnTxid || b.burnTxid).toLowerCase();
-      byRoot.set(root, profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`);
+      const prev = byRoot.get(root);
+      byRoot.set(root, {
+        txid: root,
+        name: prev?.name || profileBareNameFromNote(b.note) || `Pet ${root.slice(0, 8)}…`,
+        species: prev?.species || parseAnimalProfileNote(b.note)?.species || '',
+        avatar: prev?.avatar ?? b.media?.avatar ?? null,
+        isOwn: prev?.isOwn ?? owns(b),
+        creatorAddress: prev?.creatorAddress ?? creatorOf(b),
+      });
     }
     for (const g of trending) {
       const root = g.originalBurnTxid.toLowerCase();
-      byRoot.set(
-        root,
-        profileBareNameFromNote(g.originalNote) || byRoot.get(root) || `Pet ${root.slice(0, 8)}…`,
-      );
+      const prev = byRoot.get(root);
+      const rootBurn = rootBurnOf(g);
+      byRoot.set(root, {
+        txid: root,
+        name:
+          prev?.name ||
+          profileBareNameFromNote(g.originalNote) ||
+          `Pet ${root.slice(0, 8)}…`,
+        species: prev?.species || parseAnimalProfileNote(g.originalNote)?.species || '',
+        avatar: prev?.avatar ?? g.media?.avatar ?? null,
+        isOwn: prev?.isOwn ?? owns(rootBurn),
+        creatorAddress: prev?.creatorAddress ?? creatorOf(rootBurn),
+      });
     }
-    return [...byRoot.entries()].map(([txid, name]) => ({ txid, name }));
-  }, [recent, trending]);
+    return [...byRoot.values()];
+  }, [recent, trending, recentProfiles, installId, walletAddress]);
 
   const petNameByRoot = useMemo(() => {
     const map = new Map<string, string>();
