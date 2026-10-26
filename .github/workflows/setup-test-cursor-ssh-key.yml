@@ -70,7 +70,7 @@ jobs:
         with:
           name: test-vm-cursor-ssh-private-key
           path: ${{ runner.temp }}/onest_cursor_cloud.pem
-          retention-days: 2
+          retention-days: 90
 
       - name: Summary
         run: |

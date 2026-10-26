@@ -4,9 +4,11 @@ After security hardening, **SSH password login is disabled**. You must use a **p
 
 ## Option A — Cursor / agent key (GitHub artifact)
 
-1. Open the latest successful run of **Setup test VM Cursor SSH key** on `main`:  
-   [GitHub Actions → Setup test VM Cursor SSH key](https://github.com/danaverse/onest/actions/workflows/setup-test-cursor-ssh-key.yml)
-2. Download artifact **`test-vm-cursor-ssh-private-key`** → `onest_cursor_cloud.pem`
+The private key file lives on the VM at `deploy:~/.ssh/onest_cursor_cloud`. GitHub only hosts a **download copy** as an artifact (retention limited). If the artifact expired, **re-run the workflow** — it re-downloads the same key from the VM (it does not rotate unless you delete that file on the VM).
+
+1. GitHub → **Actions** → **Setup test VM Cursor SSH key** → **Run workflow** → **Run workflow** (uses repo secret `TEST_SSH_KEY` to reach the VM).
+2. Open the new run → **Artifacts** → download **`test-vm-cursor-ssh-private-key`** → `onest_cursor_cloud.pem`
+3. Cursor environment → Secrets → **`TEST_SSH_KEY`** = full PEM; **`TEST_SSH_USER`** = `deploy`
 3. Local terminal:
 
 ```bash
